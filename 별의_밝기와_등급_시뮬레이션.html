@@ -1,0 +1,1199 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>별의 밝기와 등급 탐구 시뮬레이션</title>
+<style>
+  :root{
+    --bg:#0f172a;
+    --bg-deep:#0a0f1f;
+    --panel:#16213c;
+    --panel-2:#1e293b;
+    --border:#2b3a5c;
+    --text:#e2e8f0;
+    --muted:#94a3b8;
+    --accent:#38bdf8;
+    --accent-2:#818cf8;
+    --gold:#fbbf24;
+    --starA:#fde68a;   /* 오개념 방지: 별 A·B 동일한 황금빛 단일 색상 */
+    --starB:#fde68a;
+    --danger:#f87171;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:radial-gradient(ellipse at 50% -20%, #1b2a4d 0%, var(--bg) 55%, var(--bg-deep) 100%);
+    color:var(--text);
+    font-family:'Segoe UI','Malgun Gothic','Apple SD Gothic Neo',sans-serif;
+    min-height:100vh;
+    padding:20px;
+  }
+  .wrap{max-width:1200px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+
+  /* ---------- 헤더 ---------- */
+  header{
+    background:linear-gradient(135deg,var(--panel) 0%,#1a2547 100%);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:18px 24px;
+    display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+  }
+  header h1{font-size:1.35rem;font-weight:700;letter-spacing:-.02em}
+  header h1 .star-ico{color:var(--gold);margin-right:8px}
+  header .sub{color:var(--muted);font-size:.85rem;margin-top:4px}
+  /* 모드 전환 탭: 아이콘 + 제목/부제 2단 카드형 (컨트롤 패널 위 배치) */
+  .tabs{display:flex;gap:10px;margin-bottom:14px}
+  .tab-btn{
+    flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+    background:var(--panel);border:1px solid var(--border);color:var(--muted);
+    padding:12px 10px;border-radius:14px;cursor:pointer;
+    transition:all .25s;font-family:inherit;
+  }
+  .tab-btn:hover{border-color:var(--muted)}
+  .tab-line1{font-size:.95rem;font-weight:800;letter-spacing:-.01em}
+  .tab-line2{font-size:.78rem;font-weight:600}
+  .tab-btn.active{
+    background:linear-gradient(160deg,#101a3a 0%,#182752 100%);
+    border-color:var(--accent);color:var(--text);
+    box-shadow:0 0 14px rgba(56,189,248,.35), inset 0 0 18px rgba(56,189,248,.08);
+  }
+  .tab-btn.active .tab-line1{color:var(--accent)}
+
+  /* ---------- 레이아웃 ---------- */
+  .main-grid{display:grid;grid-template-columns:1fr 340px;gap:16px;align-items:start}
+  .main-grid > .ctrl-col{order:2}      /* 모드 탭 + 컨트롤 패널을 우측(모바일에선 아래)으로 */
+  .main-grid > .viz-col{order:1}
+  @media (max-width:920px){.main-grid{grid-template-columns:1fr}}
+
+  .card{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:18px;
+  }
+  .card h2{
+    font-size:.95rem;font-weight:700;color:var(--accent);
+    margin-bottom:14px;display:flex;align-items:center;gap:8px;
+    padding-bottom:10px;border-bottom:1px solid var(--border);
+  }
+  .card h2 .badge{
+    font-size:.7rem;background:rgba(56,189,248,.15);color:var(--accent);
+    padding:2px 8px;border-radius:20px;border:1px solid rgba(56,189,248,.3);
+  }
+
+  /* ---------- 슬라이더 ---------- */
+  .ctrl-group{margin-bottom:16px}
+  .ctrl-label{display:flex;justify-content:space-between;font-size:.85rem;margin-bottom:6px}
+  .ctrl-label .name{color:var(--muted);font-weight:600}
+  .ctrl-label .val{font-weight:700;color:var(--text);font-variant-numeric:tabular-nums}
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:3px;
+    background:linear-gradient(90deg,var(--accent-2),var(--accent));
+    outline:none;cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;width:20px;height:20px;border-radius:50%;
+    background:#fff;border:3px solid var(--accent);
+    box-shadow:0 0 10px rgba(56,189,248,.6);cursor:pointer;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:14px;height:14px;border-radius:50%;background:#fff;border:3px solid var(--accent);
+    box-shadow:0 0 10px rgba(56,189,248,.6);cursor:pointer;
+  }
+  .star-section{
+    border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px;
+    background:rgba(10,15,31,.4);
+  }
+  .star-section .star-title{font-size:.88rem;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:7px}
+  .dotA,.dotB{width:11px;height:11px;border-radius:50%;display:inline-block}
+  .dotA{background:var(--starA);box-shadow:0 0 8px var(--starA)}
+  .dotB{background:var(--starB);box-shadow:0 0 8px var(--starB)}
+
+  /* ---------- 토글 & 버튼 ---------- */
+  .toggle-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+  .toggle-btn{
+    flex:1;min-width:130px;
+    background:var(--panel-2);border:1px solid var(--border);color:var(--muted);
+    padding:9px 10px;border-radius:9px;font-size:.8rem;font-weight:600;cursor:pointer;
+    transition:all .2s;font-family:inherit;
+  }
+  .toggle-btn.on{
+    background:rgba(56,189,248,.15);border-color:var(--accent);color:var(--accent);
+    box-shadow:inset 0 0 12px rgba(56,189,248,.1);
+  }
+  .btn{
+    border:none;border-radius:10px;padding:12px 16px;font-size:.9rem;font-weight:700;
+    cursor:pointer;transition:transform .15s, box-shadow .15s;font-family:inherit;
+  }
+  .btn:active{transform:scale(.97)}
+  .btn-primary{
+    width:100%;
+    background:linear-gradient(135deg,var(--accent) 0%,var(--accent-2) 100%);
+    color:#0b1020;box-shadow:0 3px 14px rgba(56,189,248,.3);
+  }
+  .btn-ghost{
+    background:var(--panel-2);border:1px solid var(--border);color:var(--muted);
+    font-size:.8rem;padding:8px 14px;
+  }
+  .btn-ghost:hover{color:var(--text);border-color:var(--muted)}
+  .btn-danger{background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.4);color:var(--danger);font-size:.8rem;padding:8px 14px}
+  .slider-row{display:flex;gap:8px;align-items:center}
+  .mini-btn{
+    flex-shrink:0;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.4);
+    color:var(--accent);font-size:.72rem;font-weight:700;padding:5px 9px;border-radius:7px;
+    cursor:pointer;transition:all .15s;font-family:inherit;white-space:nowrap;
+  }
+  .mini-btn:hover{background:rgba(56,189,248,.25)}
+  .mini-btn:active{transform:scale(.95)}
+  input[type=range]:disabled{opacity:.3;cursor:not-allowed}
+  input[type=range]:disabled::-webkit-slider-thumb{cursor:not-allowed;box-shadow:none}
+  .chk-row{
+    display:flex;align-items:center;gap:9px;cursor:pointer;
+    font-size:.85rem;font-weight:700;color:var(--text);
+    background:var(--panel-2);border:1px solid var(--border);border-radius:9px;
+    padding:10px 12px;margin-bottom:14px;transition:border-color .2s;
+  }
+  .chk-row:hover{border-color:var(--gold)}
+  .chk-row input{width:16px;height:16px;accent-color:var(--gold);cursor:pointer;flex-shrink:0}
+  .chk-row.checked{border-color:var(--gold);background:rgba(251,191,36,.08);color:var(--gold)}
+  .chk-sm{padding:7px 10px;font-size:.78rem;margin-bottom:10px}
+  .mini-btn:disabled{opacity:.3;cursor:not-allowed}
+  /* 변수 통제 안내 카드 (리스트형) */
+  .cn-card{
+    background:rgba(56,189,248,.07);border:1px solid rgba(56,189,248,.35);
+    border-radius:10px;margin-bottom:12px;overflow:hidden;
+    min-height:132px;   /* 모드 전환 시 아래 컨트롤이 밀리지 않도록 높이 고정 */
+  }
+  .cn-header{
+    background:rgba(56,189,248,.15);color:var(--accent);
+    font-size:.78rem;font-weight:700;padding:8px 11px;
+  }
+  .cn-list{list-style:none;padding:4px 11px 8px;margin:0}
+  .cn-list li{
+    display:flex;gap:8px;align-items:baseline;
+    padding:5px 0;font-size:.75rem;line-height:1.5;
+    border-bottom:1px dashed rgba(56,189,248,.18);
+  }
+  .cn-list li:last-child{border-bottom:none}
+  .cn-k{flex-shrink:0;color:var(--accent);font-weight:700}
+  .cn-v{color:var(--text)}
+  .cn-free-body{padding:8px 11px;font-size:.75rem;line-height:1.55;color:var(--text)}
+  /* 잠금 표시 태그 (레이아웃은 그대로, 상태만 표시) */
+  .lock-tag{
+    font-size:.66rem;font-weight:700;color:var(--muted);
+    background:rgba(148,163,184,.12);border:1px solid var(--border);
+    border-radius:12px;padding:2px 8px;margin-left:4px;vertical-align:1px;
+  }
+  /* 별 A·B 컨트롤을 좌우 2열로 나란히 배치 */
+  .star-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+  .star-grid .star-section{margin-bottom:0;padding:11px}
+  .star-grid .ctrl-label{font-size:.76rem}
+  .star-grid .ctrl-label .val{font-size:.76rem}
+  .star-grid .star-title{font-size:.82rem;margin-bottom:9px}
+  .star-grid .lock-tag{padding:1px 6px;margin-left:2px}
+  .star-grid .mini-btn{padding:4px 7px;font-size:.66rem}
+
+  /* ---------- 시각화 ---------- */
+  #sideCanvas{width:100%;height:340px;display:block;border-radius:10px;background:transparent}
+  #threeView{
+    width:100%;height:340px;border-radius:10px;overflow:hidden;
+    background:radial-gradient(ellipse at 50% 110%, #16264a 0%, #060a16 75%);
+    cursor:grab;              /* 3D 뷰어에 마우스를 올리면 손바닥 모양 */
+  }
+  #threeView:active{cursor:grabbing}   /* 드래그 중에는 쥔 손바닥 모양 */
+  #threeView canvas{display:block}
+  #threeWrap{position:relative}
+  #btnResetView{position:absolute;top:10px;left:10px;pointer-events:auto}
+  .viz-hint{font-size:.72rem;color:var(--muted);text-align:center;margin-top:6px}
+  /* 오버레이 카드 공통 스타일 (단일 별 탐구 · 두 별 비교 동일) */
+  #cmpWrap{position:relative}
+  #cmpOverlay,#singleOverlay{
+    position:absolute;top:10px;right:10px;width:225px;
+    background:rgba(10,15,31,.86);border:1px solid var(--border);
+    border-radius:10px;padding:8px 10px;
+    font-size:.7rem;pointer-events:none;
+  }
+  .ov-table{width:100%;border-collapse:collapse;margin-bottom:6px}
+  .ov-table th,.ov-table td{
+    padding:2px 3px;text-align:center;font-variant-numeric:tabular-nums;
+    white-space:nowrap;   /* '겉보/기)' 같은 글자 쪼개짐 방지 */
+  }
+  .ov-table th{color:var(--muted);font-weight:700;font-size:.68rem}
+  .ov-table td{color:var(--text);font-weight:600}
+  .ov-table td:first-child{text-align:left;color:var(--muted);font-weight:400}
+  .ov-table td.so-gold{color:var(--gold);font-weight:700}
+  .ov-note{
+    text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    color:var(--text);font-size:.68rem;
+    background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);
+    border-radius:20px;padding:4px 8px;
+  }
+  .viz-label{font-size:.78rem;color:var(--muted);margin:4px 2px 10px}
+  .sky-view{
+    position:relative;height:190px;border-radius:10px;overflow:hidden;
+    background:radial-gradient(ellipse at 50% 120%, #14213f 0%, #05070f 70%);
+    border:1px solid var(--border);
+  }
+  .sky-star{
+    position:absolute;top:44%;border-radius:50%;
+    transform:translate(-50%,-50%);
+    transition:width .35s ease, height .35s ease, box-shadow .35s ease, opacity .35s ease;
+  }
+  .sky-star-label{
+    position:absolute;bottom:12px;transform:translateX(-50%);
+    font-size:.78rem;color:var(--muted);text-align:center;line-height:1.5;
+    transition:opacity .3s;
+  }
+  .sky-star-label b{color:var(--text)}
+  .sky-limit{
+    position:absolute;top:8px;right:12px;font-size:.72rem;color:var(--muted);
+    background:rgba(15,23,42,.6);padding:3px 9px;border-radius:20px;border:1px solid var(--border);
+  }
+  .bg-star{position:absolute;background:#cbd5e1;border-radius:50%;opacity:.5}
+
+  /* ---------- 데이터 표 ---------- */
+  .log-toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+  .log-toolbar .spacer{flex:1}
+  .log-count{font-size:.8rem;color:var(--muted)}
+  .table-scroll{overflow-x:auto;border:1px solid var(--border);border-radius:10px}
+  table.log{width:100%;border-collapse:collapse;font-size:.84rem;min-width:640px}
+  table.log th{
+    background:var(--panel-2);color:var(--accent);font-weight:700;
+    padding:10px 8px;text-align:center;white-space:nowrap;
+  }
+  table.log td{
+    padding:8px;text-align:center;border-top:1px solid rgba(43,58,92,.5);
+    font-variant-numeric:tabular-nums;white-space:nowrap;
+  }
+  table.log tr:nth-child(even) td{background:rgba(10,15,31,.35)}
+  .empty-msg{text-align:center;color:var(--muted);padding:22px;font-size:.85rem}
+
+  .concept{font-size:.78rem;color:var(--muted);line-height:1.6;margin-top:12px;
+    border-top:1px dashed var(--border);padding-top:10px}
+  .concept b{color:var(--gold)}
+  .concept ul{list-style:none;margin:6px 0 0;padding:0}
+  .concept li{position:relative;padding-left:11px;margin-top:6px}
+  .concept li::before{content:'·';position:absolute;left:0;color:var(--gold);font-weight:700}
+  /* 단일 별 모드: 수치 카드가 3D 뷰로 이동한 만큼 패널 요소 간격을 넓혀 균형 유지 */
+  #ctrlSingle .ctrl-group{margin-bottom:24px}
+  #ctrlSingle .toggle-row{margin-bottom:24px}
+  #btnRecord{margin:4px 0 6px}
+  .concept{margin-top:20px;padding-top:14px}
+  footer{color:var(--muted);font-size:.75rem;text-align:center;padding:6px 0 14px}
+  .hidden{display:none !important}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 헤더 -->
+  <header>
+    <div>
+      <h1><span class="star-ico">★</span>별의 밝기와 등급 탐구 시뮬레이션</h1>
+      <div class="sub">중학교 2학년 과학 — 거리·절대 등급을 조절하며 겉보기 등급의 변화를 탐구해 보세요</div>
+    </div>
+  </header>
+
+  <!-- 중앙 2컬럼 -->
+  <div class="main-grid">
+
+    <!-- 우측: 모드 탭 + 컨트롤 -->
+    <div class="ctrl-col">
+      <div class="tabs">
+        <button class="tab-btn active" id="tabSingle">
+          <span class="tab-line1">⭐ 모드 1</span>
+          <span class="tab-line2">단일 별 탐구</span>
+        </button>
+        <button class="tab-btn" id="tabCompare">
+          <span class="tab-line1">✨ 모드 2</span>
+          <span class="tab-line2">두 별 비교</span>
+        </button>
+      </div>
+      <div class="card">
+      <h2>⚙ 컨트롤 패널 <span class="badge" id="modeBadge">모드 1</span></h2>
+
+      <!-- 모드1 컨트롤 -->
+      <div id="ctrlSingle">
+        <div class="ctrl-group">
+          <div class="ctrl-label"><span class="name">실제 밝기(절대 등급)</span><span class="val" id="valM1">2.0 등급</span></div>
+          <input type="range" id="sldM1" min="-5" max="15" step="0.5" value="2">
+        </div>
+        <div class="ctrl-group">
+          <div class="ctrl-label"><span class="name">거리</span><span class="val" id="valD1">10 pc</span></div>
+          <div class="slider-row">
+            <input type="range" id="sldD1" min="1" max="100" step="1" value="10">
+            <button class="mini-btn" id="goto10-1">10pc로 이동</button>
+          </div>
+        </div>
+        <div class="toggle-row">
+          <button class="toggle-btn on" id="tgl10pc">📏 10pc 기준선 표시</button>
+          <button class="toggle-btn" id="tglCone">📐 빛 퍼짐 가이드</button>
+        </div>
+      </div>
+
+      <!-- 모드2 컨트롤 -->
+      <div id="ctrlCompare" class="hidden">
+        <label class="chk-row checked" id="chkSameRow">
+          <input type="checkbox" id="chkSame" checked>
+          동일한 별로 비교하기 (변수 통제)
+        </label>
+        <div class="cn-card" id="ctrlNote">
+          <div id="cnLocked">
+            <div class="cn-header">💡 변수 통제 모드: 동일한 별로 거리 비교하기</div>
+            <ul class="cn-list">
+              <li><span class="cn-k">실제 밝기(절대 등급)</span><span class="cn-v">별 A = 별 B (0.0으로 동일)</span></li>
+              <li><span class="cn-k">별 A 위치</span><span class="cn-v">10 pc (기준점 고정)</span></li>
+              <li><span class="cn-k">탐구 미션</span><span class="cn-v">별 B의 거리만 조절하며 겉보기 밝기 변화를 비교해 보세요.</span></li>
+            </ul>
+          </div>
+          <div id="cnFree" class="hidden">
+            <div class="cn-header">🧪 자유 탐구 모드</div>
+            <div class="cn-free-body">
+              별 A와 별 B의 절대 등급·거리를 자유롭게 조절하며 밝기를 비교해 보세요.<br>
+              💡 실제로는 더 어두운 별이 가까이 있어서 더 밝게 보이는 상황도 만들어 보세요!
+            </div>
+          </div>
+        </div>
+        <div class="star-grid">
+          <div class="star-section">
+            <div class="star-title"><span class="dotA"></span>별 A <span class="lock-tag" id="lockTagA">🔒 고정</span></div>
+            <div class="ctrl-group">
+              <div class="ctrl-label"><span class="name">절대 등급</span><span class="val" id="valMA">0.0 등급</span></div>
+              <input type="range" id="sldMA" min="-5" max="15" step="0.5" value="0" disabled>
+            </div>
+            <div class="ctrl-group" style="margin-bottom:0">
+              <div class="ctrl-label"><span class="name">거리</span><span class="val" id="valDA">10 pc</span></div>
+              <div class="slider-row">
+                <input type="range" id="sldDA" min="1" max="100" step="1" value="10" disabled>
+                <button class="mini-btn" id="goto10-A" disabled>10pc</button>
+              </div>
+            </div>
+          </div>
+          <div class="star-section">
+            <div class="star-title"><span class="dotB"></span>별 B</div>
+            <div class="ctrl-group">
+              <div class="ctrl-label"><span class="name">절대 등급 <span class="lock-tag" id="lockTagMB">🔒</span></span><span class="val" id="valMB">0.0 등급</span></div>
+              <input type="range" id="sldMB" min="-5" max="15" step="0.5" value="0" disabled>
+            </div>
+            <div class="ctrl-group" style="margin-bottom:0">
+              <div class="ctrl-label"><span class="name">거리</span><span class="val" id="valDB">80 pc</span></div>
+              <div class="slider-row">
+                <input type="range" id="sldDB" min="1" max="100" step="1" value="80">
+                <button class="mini-btn" id="goto10-B">10pc</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="toggle-row">
+          <button class="toggle-btn on" id="tgl10pc2">📏 10pc 기준선 표시</button>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" id="btnRecord">📋 실험 데이터 기록</button>
+
+      <div class="concept">
+        <b>핵심 개념</b>
+        <ul>
+          <li>거리가 2배, 3배 … → 밝기는 1/4, 1/9 … (거리 제곱에 반비례)</li>
+          <li>1등급 차이 ≈ 2.5배, 5등급 차이 = 100배 밝기 차이</li>
+          <li>10pc 위치에서는 <b>겉보기 등급 = 절대 등급</b></li>
+        </ul>
+      </div>
+      </div>
+    </div>
+
+    <!-- 좌측: 시각화 -->
+    <div class="viz-col" style="display:flex;flex-direction:column;gap:16px">
+      <div class="card">
+        <h2>🌌 우주 측면도 <span class="badge">지구 ↔ 별의 거리</span></h2>
+        <div id="threeWrap">
+          <div id="threeView"></div>
+          <button class="mini-btn" id="btnResetView">⟲ 시점 초기화</button>
+          <div id="singleOverlay">
+            <table class="ov-table">
+              <tr><td>실제 밝기(절대)</td><td id="soM">2.0 등급</td></tr>
+              <tr><td>거리</td><td id="soD">10 pc</td></tr>
+              <tr><td>보이는 밝기(겉보기)</td><td id="soApp" class="so-gold">2.00 등급</td></tr>
+              <tr id="soAreaRow" class="hidden"><td>면적/밝기</td><td id="soArea">1칸 (1)</td></tr>
+            </table>
+            <div class="ov-note" id="soNote"></div>
+          </div>
+          <div class="viz-hint">🖱 드래그: 360° 회전 · 휠: 확대/축소 · 우클릭 드래그: 시점 이동</div>
+        </div>
+        <div id="cmpWrap" class="hidden">
+          <canvas id="sideCanvas"></canvas>
+          <div id="cmpOverlay">
+            <table class="ov-table">
+              <tr><th></th><th>별 A</th><th>별 B</th></tr>
+              <tr><td>절대 등급</td><td id="ovMA">0.0</td><td id="ovMB">0.0</td></tr>
+              <tr><td>거리(pc)</td><td id="ovDA">10</td><td id="ovDB">80</td></tr>
+              <tr><td>겉보기 등급</td><td id="ovmA" class="so-gold">0.00</td><td id="ovmB" class="so-gold">4.52</td></tr>
+            </table>
+            <div class="ov-note" id="ovNote"></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>🔭 지구에서 본 밤하늘 <span class="badge">겉보기 밝기</span></h2>
+        <div class="viz-label">지구의 관측자 눈에 실제로 보이는 밝기입니다. 겉보기 등급이 6보다 크면 맨눈으로 볼 수 없어요.</div>
+        <div class="sky-view" id="skyView">
+          <div class="sky-limit">👁 맨눈 관측 한계 : 6등급</div>
+          <!-- 배경 별, 관측 별은 JS로 생성 -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 하단: 데이터 기록표 -->
+  <div class="card">
+    <h2>📊 학생 실험 데이터 기록표</h2>
+    <div class="log-toolbar">
+      <span class="log-count" id="logCount">기록 0건</span>
+      <div class="spacer"></div>
+      <button class="btn btn-ghost" id="btnCsv">⬇ CSV 다운로드</button>
+      <button class="btn btn-danger" id="btnClear">🗑 표 초기화</button>
+    </div>
+    <div class="table-scroll">
+      <table class="log">
+        <thead>
+          <tr>
+            <th>회차</th><th>모드</th><th>별 이름</th><th>거리 (pc)</th>
+            <th>절대 등급</th><th>겉보기 등급</th><th>밝기 배수 (10pc 기준)</th>
+          </tr>
+        </thead>
+        <tbody id="logBody"></tbody>
+      </table>
+      <div class="empty-msg" id="emptyMsg">아직 기록된 데이터가 없습니다. 슬라이더를 조절한 뒤 [실험 데이터 기록] 버튼을 눌러 보세요.</div>
+    </div>
+  </div>
+
+  <footer>중2 과학 · 별의 밝기와 등급 — 학생 탐구용 웹 시뮬레이션</footer>
+</div>
+
+<!-- Three.js (WebGL 3D) + OrbitControls — CDN -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+
+<script>
+(function(){
+  'use strict';
+
+  /* ================= 상태 ================= */
+  var mode = 'single';                 // 'single' | 'compare'
+  var show10pc = true, showCone = false;
+  var sameStar = true;                 // 변수 통제: 동일한 별로 비교하기 (기본 활성화, 별 A 10pc 고정 포함)
+  var logData = [];                    // 기록 데이터
+  var trialNo = 0;
+
+  var $ = function(id){ return document.getElementById(id); };
+
+  /* ================= 과학 계산 ================= */
+  // 겉보기 등급: m = M + 5 log10(d / 10)
+  function apparentMag(M, d){ return M + 5 * Math.log10(d / 10); }
+  // 10 pc 기준 밝기 배수: (10/거리)² — 예: 20pc → 1/4배, 5pc → 4배
+  function mult10(d){ return Math.pow(10 / d, 2); }
+  function fmtMult(x){ return x >= 1 ? fmtN(x) + '배' : '1/' + fmtN(1 / x) + '배'; }
+  // 근사 표기: 정수는 그대로, 10 미만은 소수 1자리, 10 이상은 반올림 정수
+  function fmtApprox(x){
+    if (x >= 10) return Math.round(x).toLocaleString('ko-KR');
+    if (Math.abs(x - Math.round(x)) < 1e-9) return String(Math.round(x));
+    return x.toFixed(1);
+  }
+
+  function fmtMag(x){ return x.toFixed(2); }
+  // 중2 눈높이 표기: 지수 표기법(e-5 등)을 쓰지 않음
+  function fmtBright(x){
+    if (x >= 1000) return Math.round(x).toLocaleString('ko-KR');
+    if (x >= 100)  return x.toFixed(1);
+    if (x >= 1)    return x.toFixed(2);
+    if (x >= 0.01) return x.toFixed(2);
+    return '0.01 미만 (매우 어두움)';
+  }
+  // 거리 비율·면적 표기: 정수는 그대로, 소수는 2자리
+  function fmtN(x){
+    if (Math.abs(x - Math.round(x)) < 1e-9) return Math.round(x).toLocaleString('ko-KR');
+    return x.toFixed(2);
+  }
+
+  /* ================= 밤하늘 뷰 ================= */
+  var skyView = $('skyView');
+
+  // 배경 잔별
+  for (var i = 0; i < 60; i++){
+    var b = document.createElement('div');
+    b.className = 'bg-star';
+    var s = Math.random() * 1.8 + 0.6;
+    b.style.width = s + 'px'; b.style.height = s + 'px';
+    b.style.left = (Math.random() * 100) + '%';
+    b.style.top  = (Math.random() * 100) + '%';
+    b.style.opacity = (Math.random() * 0.4 + 0.15).toFixed(2);
+    skyView.appendChild(b);
+  }
+
+  function makeSkyStar(color){
+    var el = document.createElement('div');
+    el.className = 'sky-star';
+    el.dataset.color = color;
+    skyView.appendChild(el);
+    var lb = document.createElement('div');
+    lb.className = 'sky-star-label';
+    skyView.appendChild(lb);
+    return { star: el, label: lb };
+  }
+  // 오개념 방지: 모든 별은 동일한 황금빛 단일 색상(#fde68a)
+  var sky1 = makeSkyStar('#fde68a');   // 단일 모드
+  var skyA = makeSkyStar('#fde68a');   // 비교 모드 A
+  var skyB = makeSkyStar('#fde68a');   // 비교 모드 B
+
+  // 겉보기 등급 → 화면 크기/광량 (플럭스의 4제곱근에 비례시켜 보기 좋은 범위로 압축)
+  function skySize(m){
+    var size = 30 * Math.pow(10, -0.1 * m);   // m=0 → 30px, m=5 → 9.5px, m=-5 → 95px
+    return Math.max(2.5, Math.min(70, size));
+  }
+  function renderSkyStar(obj, m, xPct, name){
+    var visible = m <= 6;
+    var color = obj.star.dataset.color;
+    obj.star.style.left = xPct + '%';
+    obj.label.style.left = xPct + '%';
+
+    if (visible){
+      var size = skySize(m);
+      obj.star.style.width  = size + 'px';
+      obj.star.style.height = size + 'px';
+      obj.star.style.border = 'none';
+      obj.star.style.background = 'radial-gradient(circle, #ffffff 0%, ' + color + ' 45%, transparent 75%)';
+      obj.star.style.boxShadow =
+        '0 0 ' + (size * 0.8) + 'px ' + (size * 0.25) + 'px ' + color + '66,' +
+        '0 0 ' + (size * 2.2) + 'px ' + (size * 0.6) + 'px ' + color + '33';
+      obj.star.style.opacity = 1;
+      obj.label.innerHTML = name;
+    } else {
+      // 맨눈 한계(6등급) 초과: 희미한 점선 원으로만 위치 표시
+      obj.star.style.width  = '20px';
+      obj.star.style.height = '20px';
+      obj.star.style.background = 'transparent';
+      obj.star.style.boxShadow = 'none';
+      obj.star.style.border = '1.5px dashed rgba(148,163,184,.55)';
+      obj.star.style.opacity = 0.8;
+      obj.label.innerHTML = name +
+        '<br><span style="color:#f87171;font-weight:700">🚫 맨눈 관측 불가 (망원경 필요)</span>';
+    }
+  }
+  function hideSkyStar(obj){
+    obj.star.style.opacity = 0;
+    obj.star.style.width = '0px'; obj.star.style.height = '0px';
+    obj.star.style.border = 'none';
+    obj.label.innerHTML = '';
+  }
+
+  /* ================= 측면도 캔버스 ================= */
+  var canvas = $('sideCanvas'), ctx = canvas.getContext('2d');
+  var bgDots = [];
+  for (var j = 0; j < 70; j++){
+    bgDots.push({ x: Math.random(), y: Math.random(), r: Math.random()*1.4+0.4, a: Math.random()*0.5+0.1 });
+  }
+
+  function resizeCanvas(){
+    var dpr = window.devicePixelRatio || 1;
+    var rect = canvas.getBoundingClientRect();
+    canvas.width  = rect.width  * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { W: rect.width, H: rect.height };
+  }
+
+  function drawGlowStar(x, y, r, color){
+    var g = ctx.createRadialGradient(x, y, 0, x, y, r * 3);
+    g.addColorStop(0, '#ffffff');
+    g.addColorStop(0.25, color);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(x, y, r * 3, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function drawSide(){
+    if (mode !== 'compare') return;   // 단일 별 모드는 Three.js 3D 뷰(threeView)가 담당
+    var sz = resizeCanvas(), W = sz.W, H = sz.H;
+    ctx.clearRect(0, 0, W, H);
+
+    // 배경 잔별
+    bgDots.forEach(function(d){
+      ctx.globalAlpha = d.a;
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath(); ctx.arc(d.x * W, d.y * H, d.r, 0, Math.PI * 2); ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+
+    var padR = 45;
+    var axisY = H * 0.80;   // (2D 비교 모드) 지구 평면을 하단에 밀착 배치
+    var earthX = 42;
+    // 거리 → x 좌표 (선형 스케일: 지구(0pc) ~ 100pc, 슬라이더 이동 폭과 1:1 비례)
+    function xOf(d){ return earthX + (d / 100) * (W - earthX - padR); }
+    // 절대 등급 → 별 그림 크기 (밝은 별일수록 큼)
+    function radiusOf(M){ return 5 + (15 - M) * 0.75; }
+
+    // 지구 그리기 (양쪽 모드 공용)
+    function drawEarth(x, y){
+      var eg = ctx.createRadialGradient(x - 3, y - 3, 2, x, y, 13);
+      eg.addColorStop(0, '#93c5fd'); eg.addColorStop(0.6, '#2563eb'); eg.addColorStop(1, '#1e3a8a');
+      ctx.fillStyle = eg;
+      ctx.beginPath(); ctx.arc(x, y, 12, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#86efac';
+      ctx.beginPath(); ctx.arc(x - 4, y - 3, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#9db4d8'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('지구', x, y + 28);
+    }
+
+    {
+      // ───────── [두 별 비교] 2D 평면 뷰 (거리 비교에 집중) ─────────
+      // 축
+      ctx.strokeStyle = '#334c7a'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(earthX, axisY); ctx.lineTo(W - padR + 20, axisY); ctx.stroke();
+      // 눈금 (선형 간격: 10pc마다 눈금, 좁은 화면에서는 20pc마다 라벨)
+      ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+      var labelStep = (W - earthX - padR) < 480 ? 20 : 10;
+      for (var tick = 10; tick <= 100; tick += 10){
+        var tx = xOf(tick);
+        ctx.strokeStyle = '#334c7a';
+        ctx.beginPath(); ctx.moveTo(tx, axisY - 4); ctx.lineTo(tx, axisY + 4); ctx.stroke();
+        if (tick % labelStep === 0){
+          ctx.fillStyle = '#7288ad';
+          ctx.fillText(tick + '', tx, axisY + 18);
+        }
+      }
+      ctx.fillStyle = '#7288ad';
+      ctx.fillText('거리 (pc)', W - padR + 12, axisY + 34);
+
+      // 10pc 기준선 (변수 통제 모드에서는 항상 표시 + [기준별] 라벨)
+      var emph10 = sameStar;
+      if (show10pcCmp || emph10){
+        var x10 = xOf(10);
+        ctx.save();
+        ctx.setLineDash([6, 5]);
+        ctx.strokeStyle = emph10 ? 'rgba(56,189,248,1)' : 'rgba(56,189,248,.75)';
+        ctx.lineWidth = emph10 ? 2 : 1.5;
+        ctx.beginPath(); ctx.moveTo(x10, 18); ctx.lineTo(x10, axisY); ctx.stroke();
+        ctx.restore();
+        ctx.fillStyle = '#38bdf8'; ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(emph10 ? '[기준별] 10 pc 기준선' : '10 pc 기준선', x10 + 8, 14);
+        ctx.textAlign = 'center';
+      }
+
+      drawEarth(earthX, axisY);
+
+      // 두 별 모두 지구 평면 가까이에 배치해 10pc 수직선과의 사선 착시 최소화
+      var yA = axisY - H * 0.17, yB = axisY - H * 0.07;
+      // 오개념 방지: 두 별 모두 동일한 황금빛 단일 색상
+      drawCompareStar(state.MA, state.dA, yA, '#fde68a', 'A', xOf, earthX, axisY);
+      drawCompareStar(state.MB, state.dB, yB, '#fde68a', 'B', xOf, earthX, axisY);
+    }
+
+
+    function drawCompareStar(M, d, y, color, name, xOf, ex, ay){
+      var x = xOf(d);
+      // 시선
+      ctx.save();
+      ctx.setLineDash([2, 5]);
+      ctx.strokeStyle = color + '55';
+      ctx.beginPath(); ctx.moveTo(ex + 10, ay - 8); ctx.lineTo(x, y); ctx.stroke();
+      // 거리 수직 안내선
+      ctx.setLineDash([3, 4]);
+      ctx.strokeStyle = 'rgba(148,163,184,.3)';
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, ay); ctx.stroke();
+      ctx.restore();
+
+      var r = 5 + (15 - M) * 0.75;
+      drawGlowStar(x, y, r, color);
+      ctx.fillStyle = color; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('별 ' + name, x, y - r * 3 - 6);
+      ctx.fillStyle = '#9db4d8'; ctx.font = '11px sans-serif';
+      ctx.fillText(d + ' pc', x, ay - 8);
+    }
+
+  }
+
+  /* ================= 상태 & 갱신 ================= */
+  var state = { M1: 2, d1: 10, MA: 0, dA: 10, MB: 0, dB: 80 };
+  var show10pcCmp = true;
+
+  function update(){
+    if (mode === 'single'){
+      var m = apparentMag(state.M1, state.d1);
+      $('valM1').textContent = state.M1.toFixed(1) + ' 등급';
+      $('valD1').textContent = state.d1 + ' pc';
+
+      // 3D 뷰 오버레이 카드: 수치 표
+      $('soM').textContent = state.M1.toFixed(1) + ' 등급';
+      $('soD').textContent = state.d1 + ' pc';
+      $('soApp').textContent = fmtMag(m) + ' 등급';
+
+      // 빛 퍼짐 가이드 ON일 때만: 면적/밝기 행 (예: 20.3칸 (1/20.3))
+      $('soAreaRow').classList.toggle('hidden', !showCone);
+      if (showCone){
+        var N = state.d1 / 10;
+        var area = N * N;
+        var areaStr = (Math.abs(area - Math.round(area)) < 1e-9) ? String(Math.round(area)) : area.toFixed(1);
+        var perStr = area >= 1 ? (state.d1 === 10 ? '1' : '1/' + areaStr) : fmtApprox(1 / area) + '배';
+        $('soArea').textContent = areaStr + '칸 (' + perStr + ')';
+      }
+
+      // 하단 한 줄 요약 뱃지 (nowrap에 맞춘 압축 문구 — 줄바꿈·글자 쪼개짐 방지)
+      var soTxt;
+      if (state.d1 === 10){
+        soTxt = '⭐ 10 pc · 실제 밝기 = 보이는 밝기';
+      } else if (state.d1 > 10){
+        var far = state.d1 / 10;
+        soTxt = '📍 ' + fmtApprox(far) + '배 멀어짐 → 약 ' + fmtApprox(far * far) + '배 어두움';
+      } else {
+        var near = 10 / state.d1;
+        soTxt = '📍 ' + fmtApprox(near) + '배 가까워짐 → ' + fmtApprox(near * near) + '배 더 밝음';
+      }
+      $('soNote').textContent = soTxt;
+
+      renderSkyStar(sky1, m, 50, '별');
+      hideSkyStar(skyA); hideSkyStar(skyB);
+    } else {
+      // 변수 통제: 두 별 모두 절대 등급 0.0 고정 + 별 A 거리 10pc 기준별 위치 고정
+      if (sameStar){
+        state.MA = 0; state.MB = 0;
+        $('sldMA').value = 0; $('sldMB').value = 0;
+        state.dA = 10;
+        $('sldDA').value = 10;
+      }
+      var mA = apparentMag(state.MA, state.dA);
+      var mB = apparentMag(state.MB, state.dB);
+      $('valMA').textContent = state.MA.toFixed(1) + ' 등급';
+      $('valDA').textContent = state.dA + ' pc';
+      $('valMB').textContent = state.MB.toFixed(1) + ' 등급';
+      $('valDB').textContent = state.dB + ' pc';
+      // 캔버스 오버레이 카드의 수치 표 갱신
+      $('ovMA').textContent = state.MA.toFixed(1);
+      $('ovMB').textContent = state.MB.toFixed(1);
+      $('ovDA').textContent = state.dA;
+      $('ovDB').textContent = state.dB;
+      $('ovmA').textContent = fmtMag(mA);
+      $('ovmB').textContent = fmtMag(mB);
+
+      // 밝기 비교 한 줄 뱃지 — textContent로 안전하게 대입 (ellipsis와 충돌 방지)
+      var ovShort;
+      var fluxRatio = Math.pow(2.512, mB - mA);   // A가 B보다 몇 배 밝게 보이는가
+      if (Math.abs(mA - mB) < 0.05){
+        ovShort = '🌟 두 별이 거의 같은 밝기';
+      } else if (mA < mB){
+        ovShort = '✨ 별 A가 ' + fmtBright(fluxRatio) + '배 더 밝음';
+      } else {
+        ovShort = '✨ 별 B가 ' + fmtBright(1 / fluxRatio) + '배 더 밝음';
+      }
+      $('ovNote').textContent = ovShort;
+
+      renderSkyStar(skyA, mA, 32, '별 A');
+      renderSkyStar(skyB, mB, 68, '별 B');
+      hideSkyStar(sky1);
+    }
+    drawSide();     // 비교 모드: 2D 캔버스
+    threeUpdate();  // 단일 모드: Three.js 3D 씬
+  }
+
+  /* ================= 모드 전환 ================= */
+  function setMode(next){
+    mode = next;
+    var single = (mode === 'single');
+    $('tabSingle').classList.toggle('active', single);
+    $('tabCompare').classList.toggle('active', !single);
+    $('ctrlSingle').classList.toggle('hidden', !single);
+    $('ctrlCompare').classList.toggle('hidden', single);
+    $('modeBadge').textContent = single ? '모드 1' : '모드 2';
+    // 단일 모드: Three.js 3D 뷰 / 비교 모드: 2D 캔버스 (+오버레이 카드)
+    $('threeWrap').classList.toggle('hidden', !single);
+    $('cmpWrap').classList.toggle('hidden', single);
+    if (single) threeResize();
+    update();
+  }
+  $('tabSingle').addEventListener('click', function(){ setMode('single'); });
+  $('tabCompare').addEventListener('click', function(){ setMode('compare'); });
+
+  /* ================= 입력 이벤트 ================= */
+  function bindSlider(id, key, isInt){
+    $(id).addEventListener('input', function(e){
+      state[key] = isInt ? parseInt(e.target.value, 10) : parseFloat(e.target.value);
+      update();
+    });
+  }
+  bindSlider('sldM1', 'M1', false);
+  bindSlider('sldD1', 'd1', true);
+  bindSlider('sldMA', 'MA', false);
+  bindSlider('sldDA', 'dA', true);
+  bindSlider('sldMB', 'MB', false);
+  bindSlider('sldDB', 'dB', true);
+
+  $('tgl10pc').addEventListener('click', function(){
+    show10pc = !show10pc;
+    this.classList.toggle('on', show10pc);
+    threeUpdate();
+  });
+  $('tglCone').addEventListener('click', function(){
+    showCone = !showCone;
+    this.classList.toggle('on', showCone);
+    update();   // 캔버스 원뿔 + 수치 카드 면적 안내를 함께 갱신
+  });
+  $('tgl10pc2').addEventListener('click', function(){
+    show10pcCmp = !show10pcCmp;
+    this.classList.toggle('on', show10pcCmp);
+    drawSide();
+  });
+
+  // [동일한 별로 비교하기] 변수 통제 체크박스
+  // 변수 통제 잠금: 두 별의 절대 등급을 0.0으로, 별 A의 거리를 10pc로 고정
+  function applyRefLock(){
+    if (sameStar){
+      state.MA = 0; state.MB = 0;
+      $('sldMA').value = 0; $('sldMB').value = 0;
+      state.dA = 10;
+      $('sldDA').value = 10;
+    }
+    $('sldMA').disabled = sameStar;
+    $('sldMB').disabled = sameStar;
+    $('sldDA').disabled = sameStar;
+    $('goto10-A').disabled = sameStar;
+    // 패널 구조는 항상 그대로 유지 — 안내 카드 내용과 🔒 태그만 제자리에서 전환 (화면 요동 방지)
+    $('cnLocked').classList.toggle('hidden', !sameStar);
+    $('cnFree').classList.toggle('hidden', sameStar);
+    $('lockTagA').classList.toggle('hidden', !sameStar);
+    $('lockTagMB').classList.toggle('hidden', !sameStar);
+  }
+
+  $('chkSame').addEventListener('change', function(){
+    sameStar = this.checked;
+    $('chkSameRow').classList.toggle('checked', sameStar);
+    applyRefLock();
+    update();
+  });
+
+  // [10pc로 이동] 원클릭 버튼
+  function goto10(key, sliderId){
+    state[key] = 10;
+    $(sliderId).value = 10;
+    update();
+  }
+  $('goto10-1').addEventListener('click', function(){ goto10('d1', 'sldD1'); });
+  $('goto10-A').addEventListener('click', function(){ goto10('dA', 'sldDA'); });
+  $('goto10-B').addEventListener('click', function(){ goto10('dB', 'sldDB'); });
+
+  /* ================= 데이터 기록 ================= */
+  function addRow(row){
+    logData.push(row);
+    var tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + row.trial + '</td><td>' + row.mode + '</td><td>' + row.name + '</td>' +
+      '<td>' + row.d + '</td><td>' + row.M.toFixed(1) + '</td>' +
+      '<td>' + fmtMag(row.m) + '</td><td>' + fmtMult(row.bright) + '</td>';
+    $('logBody').appendChild(tr);
+  }
+  function refreshLogUi(){
+    $('logCount').textContent = '기록 ' + logData.length + '건';
+    $('emptyMsg').style.display = logData.length ? 'none' : 'block';
+  }
+
+  $('btnRecord').addEventListener('click', function(){
+    trialNo++;
+    if (mode === 'single'){
+      var m = apparentMag(state.M1, state.d1);
+      addRow({ trial: trialNo, mode: '단일 별', name: '별',
+               d: state.d1, M: state.M1, m: m, bright: mult10(state.d1) });
+    } else {
+      var mA = apparentMag(state.MA, state.dA);
+      var mB = apparentMag(state.MB, state.dB);
+      addRow({ trial: trialNo, mode: '두 별 비교', name: '별 A',
+               d: state.dA, M: state.MA, m: mA, bright: mult10(state.dA) });
+      addRow({ trial: trialNo, mode: '두 별 비교', name: '별 B',
+               d: state.dB, M: state.MB, m: mB, bright: mult10(state.dB) });
+    }
+    refreshLogUi();
+    // 기록 피드백
+    var btn = this;
+    btn.textContent = '✅ 기록 완료!';
+    setTimeout(function(){ btn.textContent = '📋 실험 데이터 기록'; }, 700);
+  });
+
+  $('btnClear').addEventListener('click', function(){
+    if (!logData.length) return;
+    if (!confirm('기록된 실험 데이터 ' + logData.length + '건을 모두 삭제할까요?')) return;
+    logData = [];
+    trialNo = 0;
+    $('logBody').innerHTML = '';
+    refreshLogUi();
+  });
+
+  $('btnCsv').addEventListener('click', function(){
+    if (!logData.length){ alert('저장할 데이터가 없습니다. 먼저 [실험 데이터 기록]을 눌러 주세요.'); return; }
+    var lines = ['회차,모드,별 이름,거리(pc),실제 밝기(절대 등급),눈으로 보는 밝기(겉보기 등급),밝기 배수(10pc 기준)'];
+    logData.forEach(function(r){
+      lines.push([r.trial, r.mode, r.name, r.d, r.M.toFixed(1), r.m.toFixed(2), r.bright.toPrecision(4)].join(','));
+    });
+    // 한글 Excel 호환을 위한 UTF-8 BOM
+    var blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = '별의_밝기와_등급_실험데이터.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  });
+
+  /* ================= Three.js 3D 우주 공간 (단일 별 탐구 모드) ================= */
+  var threeReady = false;
+  var tScene, tCamera, tRenderer, tControls;
+  var tStarGroup, tStarMesh, tGlow, tStarLight, tStarLabel;
+  var tConeGroup, tLine10, tLabel10;
+  var EYE = 7;          // 지구·별이 바닥 위에 떠 있는 높이 (world y, 1 unit = 1 pc)
+  var PANEL_HALF = 3;   // 10pc(거리 1배) 면적판의 절반 크기 (world)
+
+  // 캔버스 텍스트 스프라이트 (라벨용) — userData.redraw(text)로 내용 갱신 가능
+  function makeLabel(text, color, worldW){
+    var cnv = document.createElement('canvas');
+    cnv.width = 512; cnv.height = 128;
+    var tc = cnv.getContext('2d');
+    var tex = new THREE.CanvasTexture(cnv);
+    var spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+    spr.scale.set(worldW, worldW / 4, 1);
+    spr.userData.redraw = function(t){
+      tc.clearRect(0, 0, 512, 128);
+      tc.font = 'bold 40px sans-serif';
+      tc.textAlign = 'center'; tc.textBaseline = 'middle';
+      tc.fillStyle = color;
+      tc.fillText(t, 256, 64);
+      tex.needsUpdate = true;
+    };
+    spr.userData.redraw(text);
+    return spr;
+  }
+
+  // n×n 면적판 텍스처: 반투명 스크린 + 글로우 격자선, 칸 채움 알파 ∝ 1/n² (밝기 1 → 1/4 → 1/9)
+  function panelTexture(n){
+    var c = document.createElement('canvas'); c.width = c.height = 256;
+    var g = c.getContext('2d');
+    var alpha = 0.8 / (n * n);
+    var cell = 256 / n;
+    // 반투명 스크린 배경
+    g.fillStyle = 'rgba(120,150,220,0.08)';
+    g.fillRect(0, 0, 256, 256);
+    // 칸 채움 (단위 면적당 빛의 양)
+    for (var r = 0; r < n; r++){
+      for (var q = 0; q < n; q++){
+        g.fillStyle = 'rgba(251,191,36,' + alpha.toFixed(3) + ')';
+        g.fillRect(q * cell + 3, r * cell + 3, cell - 6, cell - 6);
+      }
+    }
+    // 글로우 격자선
+    g.shadowColor = 'rgba(251,191,36,0.9)';
+    g.shadowBlur = 7;
+    g.strokeStyle = 'rgba(255,224,130,0.95)';
+    g.lineWidth = 2.5;
+    for (var i = 0; i <= n; i++){
+      var p = Math.min(254.5, Math.max(1.5, i * cell));
+      g.beginPath(); g.moveTo(p, 1.5); g.lineTo(p, 254.5); g.stroke();
+      g.beginPath(); g.moveTo(1.5, p); g.lineTo(254.5, p); g.stroke();
+    }
+    return new THREE.CanvasTexture(c);
+  }
+
+  function initThree(){
+    var box = $('threeView');
+    if (typeof THREE === 'undefined'){
+      box.innerHTML = '<div style="padding:44px 16px;text-align:center;color:#94a3b8;font-size:.85rem;line-height:1.7">' +
+        '⚠ 3D 라이브러리(Three.js)를 불러오지 못했습니다.<br>인터넷 연결을 확인한 뒤 새로고침해 주세요.</div>';
+      return;
+    }
+    var wBox = box.clientWidth || 600, hBox = box.clientHeight || 340;
+    tScene = new THREE.Scene();
+    tCamera = new THREE.PerspectiveCamera(45, wBox / hBox, 0.1, 1000);
+    // 교과서 스타일 비스듬한 사선 시점: 별·광콘·격자판 3개가 겹치지 않고 한눈에 보이는 구도
+    tCamera.position.set(44, 26, 74);
+    tRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    tRenderer.setPixelRatio(window.devicePixelRatio || 1);
+    tRenderer.setSize(wBox, hBox);
+    box.appendChild(tRenderer.domElement);
+
+    // 마우스 드래그 360° 회전 · 휠 줌 · 우클릭 팬
+    tControls = new THREE.OrbitControls(tCamera, tRenderer.domElement);
+    tControls.target.set(30, EYE, 0);
+    tControls.enableDamping = true;
+    tControls.dampingFactor = 0.08;
+    tControls.minDistance = 15;
+    tControls.maxDistance = 260;
+    tControls.maxPolarAngle = Math.PI * 0.52;   // 바닥 아래로 뒤집히지 않게
+
+    // [⟲ 시점 초기화] — 기본 사선 구도로 복귀
+    $('btnResetView').addEventListener('click', function(){
+      tCamera.position.set(44, 26, 74);
+      tControls.target.set(30, EYE, 0);
+      tControls.update();
+      tRenderer.render(tScene, tCamera);
+    });
+
+    tScene.add(new THREE.AmbientLight(0x8fa3c8, 0.85));
+
+    // 배경 잔별
+    var pGeo = new THREE.BufferGeometry();
+    var pos = [];
+    for (var i = 0; i < 260; i++){
+      pos.push((Math.random() - 0.5) * 420, Math.random() * 220 - 40, (Math.random() - 0.5) * 420);
+    }
+    pGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    tScene.add(new THREE.Points(pGeo, new THREE.PointsMaterial({ color: 0xcbd5e1, size: 0.7, transparent: true, opacity: 0.7 })));
+
+    // ① 3D 우주 바닥 격자 (지구 0pc ~ 100pc, 10pc 간격)
+    var grid = new THREE.GridHelper(100, 10, 0x4a6da8, 0x2c4570);
+    grid.position.set(50, 0, 0);
+    tScene.add(grid);
+    var axGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0.02, 0), new THREE.Vector3(100, 0.02, 0)]);
+    tScene.add(new THREE.Line(axGeo, new THREE.LineBasicMaterial({ color: 0x5b82c4 })));
+    [['0 pc', 0], ['50 pc', 50], ['100 pc', 100]].forEach(function(t){
+      var lb = makeLabel(t[0], '#7288ad', 12);
+      lb.position.set(t[1], 1.6, 8);
+      tScene.add(lb);
+    });
+
+    // ② 3D 지구 구체 (발광)
+    var earth = new THREE.Mesh(
+      new THREE.SphereGeometry(2.1, 24, 24),
+      new THREE.MeshPhongMaterial({ color: 0x2563eb, emissive: 0x14337a, shininess: 40 })
+    );
+    earth.position.set(0, EYE, 0);
+    tScene.add(earth);
+    var earthLabel = makeLabel('지구', '#9db4d8', 12);
+    earthLabel.position.set(0, EYE + 4.6, 0);
+    tScene.add(earthLabel);
+
+    // ⑤ 10pc 수직 기준선 (점선) + 3D 라벨
+    var l10Geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(10, 0, 0), new THREE.Vector3(10, 20, 0)]);
+    tLine10 = new THREE.Line(l10Geo, new THREE.LineDashedMaterial({ color: 0x38bdf8, dashSize: 1.4, gapSize: 1, transparent: true, opacity: 0.9 }));
+    tLine10.computeLineDistances();
+    tScene.add(tLine10);
+    tLabel10 = makeLabel('10 pc 기준선', '#38bdf8', 18);
+    tLabel10.position.set(10, 22, 0);
+    tScene.add(tLabel10);
+
+    // ② 3D 별 구체 (발광 메쉬 + 글로우 스프라이트 + 광원 + 라벨)
+    tStarGroup = new THREE.Group();
+    tStarMesh = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 24), new THREE.MeshBasicMaterial({ color: 0xfde68a }));
+    tStarGroup.add(tStarMesh);
+    var glowCnv = document.createElement('canvas'); glowCnv.width = glowCnv.height = 128;
+    var gg = glowCnv.getContext('2d');
+    var grad = gg.createRadialGradient(64, 64, 0, 64, 64, 64);
+    grad.addColorStop(0, 'rgba(255,255,255,1)');
+    grad.addColorStop(0.25, 'rgba(253,230,138,.9)');
+    grad.addColorStop(1, 'rgba(253,230,138,0)');
+    gg.fillStyle = grad; gg.fillRect(0, 0, 128, 128);
+    tGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: new THREE.CanvasTexture(glowCnv), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
+    }));
+    tStarGroup.add(tGlow);
+    tStarLight = new THREE.PointLight(0xffe9a8, 1.1, 160);
+    tStarGroup.add(tStarLight);
+    tStarLabel = makeLabel('', '#fde68a', 10);
+    tStarGroup.add(tStarLabel);
+    tStarGroup.position.set(state.d1, EYE, 0);
+    tScene.add(tStarGroup);
+
+    // ③·④ 광콘 + 면적판 그룹 (threeUpdate에서 재구성)
+    tConeGroup = new THREE.Group();
+    tScene.add(tConeGroup);
+
+    threeReady = true;
+    threeUpdate();
+    (function loop(){
+      requestAnimationFrame(loop);
+      if (tControls) tControls.update();
+      if (mode === 'single') tRenderer.render(tScene, tCamera);
+    })();
+  }
+
+  function threeUpdate(){
+    if (!threeReady || mode !== 'single') return;
+    var d = state.d1, M = state.M1;
+
+    // 별 위치·크기·라벨 (절대 등급이 밝을수록 크게)
+    tStarGroup.position.x = d;
+    var r = 1.2 + (15 - M) * 0.14;
+    tStarMesh.scale.setScalar(r);
+    tGlow.scale.set(r * 7, r * 7, 1);
+    tStarLabel.userData.redraw('별');
+    tStarLabel.position.y = r + 3.2;
+
+    // 10pc 기준선 토글
+    tLine10.visible = show10pc;
+    tLabel10.visible = show10pc;
+
+    // ③ 실시간 광콘 + ④ 입체 면적판 재구성
+    while (tConeGroup.children.length){
+      var ch = tConeGroup.children.pop();
+      tConeGroup.remove(ch);
+      if (ch.geometry) ch.geometry.dispose();
+      if (ch.material){
+        if (ch.material.map) ch.material.map.dispose();
+        ch.material.dispose();
+      }
+    }
+    if (showCone && d >= 10){
+      var len = Math.min(d, 30);
+      // 은은한 반투명 원뿔 광선: 바깥 부드러운 원뿔 + 안쪽 밝은 심(가산 블렌딩)
+      var baseR = (len / 10) * PANEL_HALF * 1.25;
+      var cone = new THREE.Mesh(
+        new THREE.ConeGeometry(baseR, len, 48, 1, true),
+        new THREE.MeshBasicMaterial({ color: 0xffd97a, transparent: true, opacity: 0.10,
+          side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending })
+      );
+      cone.rotation.z = -Math.PI / 2;          // 꼭짓점이 +x(별) 방향
+      cone.position.set(d - len / 2, EYE, 0);
+      tConeGroup.add(cone);
+      var core = new THREE.Mesh(
+        new THREE.ConeGeometry(baseR * 0.45, len, 32, 1, true),
+        new THREE.MeshBasicMaterial({ color: 0xfff3c4, transparent: true, opacity: 0.10,
+          side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending })
+      );
+      core.rotation.z = -Math.PI / 2;
+      core.position.set(d - len / 2, EYE, 0);
+      tConeGroup.add(core);
+
+      for (var n = 1; n <= 3; n++){
+        if (d - 10 * n < -0.4) break;
+        var s = 2 * PANEL_HALF * n;
+        var panel = new THREE.Mesh(
+          new THREE.PlaneGeometry(s, s),
+          new THREE.MeshBasicMaterial({ map: panelTexture(n), transparent: true, side: THREE.DoubleSide, depthWrite: false })
+        );
+        panel.rotation.y = Math.PI / 2;
+        panel.position.set(d - 10 * n, EYE, 0);
+        tConeGroup.add(panel);
+        var pl = makeLabel('거리 ' + n + '배 · ' + (n * n) + '칸 · 밝기 ' + (n === 1 ? '1' : '1/' + (n * n)), '#fbbf24', 24);
+        pl.position.set(d - 10 * n, EYE + PANEL_HALF * n + 2.6, 0);
+        tConeGroup.add(pl);
+      }
+    }
+
+    // 즉시 렌더 (rAF 루프와 별개로 슬라이더 조작에 곧바로 반응)
+    tRenderer.render(tScene, tCamera);
+  }
+
+  function threeResize(){
+    if (!threeReady) return;
+    var box = $('threeView');
+    var wBox = box.clientWidth || 600, hBox = box.clientHeight || 340;
+    tCamera.aspect = wBox / hBox;
+    tCamera.updateProjectionMatrix();
+    tRenderer.setSize(wBox, hBox);
+  }
+
+  /* ================= 초기화 ================= */
+  window.addEventListener('resize', function(){ drawSide(); threeResize(); });
+  refreshLogUi();
+  initThree();
+  update();
+})();
+</script>
+</body>
+</html>

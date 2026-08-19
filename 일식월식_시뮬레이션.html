@@ -1,0 +1,1440 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>일식과 월식 시뮬레이션 (중1 태양계)</title>
+<style>
+  :root{
+    --bg:#0a0f20; --panel:rgba(24,32,60,.55); --panel2:rgba(36,48,86,.6); --line:rgba(130,160,235,.20);
+    --text:#eef3ff; --muted:#a3b4de; --accent:#ffd24a; --accent2:#5fd0ff; --accent3:#9b8cff;
+    --red:#ff6a4d; --good:#5fe0a0;
+    --glass-hi:rgba(255,255,255,.07);
+    --shadow:0 10px 34px rgba(0,0,0,.45), inset 0 1px 0 var(--glass-hi);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:"Malgun Gothic","맑은 고딕",system-ui,sans-serif;
+    color:var(--text); padding:18px; min-height:100vh;
+    background:
+      radial-gradient(1100px 620px at 12% -8%, rgba(95,208,255,.14), transparent 60%),
+      radial-gradient(1000px 680px at 92% 6%, rgba(155,140,255,.16), transparent 62%),
+      radial-gradient(900px 700px at 60% 108%, rgba(255,120,90,.08), transparent 60%),
+      linear-gradient(180deg,#070a16,#0a0f20 55%,#080b16);
+    background-attachment:fixed;
+  }
+  h1{font-size:1.5rem; margin:0 0 4px; font-weight:800; letter-spacing:-.01em;
+    background:linear-gradient(92deg,#fff,#bcd3ff 45%,#9b8cff);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;}
+  .sub{color:var(--muted); font-size:.88rem; margin-bottom:16px;}
+  .wrap{max-width:1200px; margin:0 auto;}
+  /* 글래스 표면 공통 */
+  .controls, .card, .info, .stages{
+    background:var(--panel);
+    -webkit-backdrop-filter:blur(16px) saturate(140%);
+    backdrop-filter:blur(16px) saturate(140%);
+    border:1px solid var(--line);
+    box-shadow:var(--shadow);
+  }
+
+  /* 컨트롤 — 지구 뷰 오른쪽 세로 패널 */
+  .controls{
+    display:flex; flex-direction:column; align-items:stretch; gap:14px;
+    border-radius:16px; padding:15px; margin:0; align-self:start;
+  }
+  .controls .ctitle{color:#cdd9ff; font-size:.82rem; font-weight:800; letter-spacing:.02em;
+    padding-bottom:10px; border-bottom:1px solid var(--line);}
+  .group{display:flex; align-items:center; gap:8px;}
+  .controls .group{flex-direction:column; align-items:stretch; gap:8px;}
+  .controls .btnrow{display:flex; gap:8px;}
+  .controls .btnrow button{flex:1; padding:9px 6px;}
+  .controls #seek, .controls #speed{width:100%;}
+  .controls button.play{width:100%;}
+  .group .lbl{color:var(--muted); font-size:.82rem; font-weight:600;}
+  button{
+    background:linear-gradient(180deg, rgba(58,72,120,.55), rgba(38,50,90,.55));
+    color:var(--text); border:1px solid var(--line);
+    border-radius:11px; padding:9px 14px; font-size:.9rem; cursor:pointer;
+    font-family:inherit; white-space:nowrap;
+    box-shadow:inset 0 1px 0 var(--glass-hi), 0 3px 10px rgba(0,0,0,.28);
+    transition:transform .18s cubic-bezier(.2,.8,.2,1), box-shadow .18s ease, border-color .18s ease, background .18s ease;
+  }
+  button:hover{border-color:var(--accent2); transform:translateY(-1px);
+    box-shadow:0 0 0 3px rgba(95,208,255,.14), 0 8px 20px rgba(0,0,0,.35);}
+  button:active{transform:translateY(1px) scale(.98);
+    box-shadow:inset 0 2px 8px rgba(0,0,0,.4);}
+  button.active{background:linear-gradient(180deg,#ffdf66,#ffc42e); color:#241700;
+    border-color:rgba(255,210,74,.7); font-weight:800;
+    box-shadow:0 0 0 3px rgba(255,210,74,.18), 0 8px 22px rgba(255,180,40,.28);}
+  button.play{min-width:96px;}
+  /* 커스텀 슬라이더 */
+  input[type=range]{ -webkit-appearance:none; appearance:none; width:150px; height:7px;
+    border-radius:7px; background:linear-gradient(90deg,var(--accent2),var(--accent3));
+    outline:none; cursor:pointer; box-shadow:inset 0 1px 2px rgba(0,0,0,.4);}
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; appearance:none;
+    width:17px; height:17px; border-radius:50%; background:#fff;
+    box-shadow:0 0 0 4px rgba(95,208,255,.25), 0 2px 7px rgba(0,0,0,.45);
+    transition:box-shadow .16s ease, transform .16s ease;}
+  input[type=range]::-webkit-slider-thumb:hover{ box-shadow:0 0 0 7px rgba(95,208,255,.32), 0 2px 8px rgba(0,0,0,.5); transform:scale(1.06);}
+  input[type=range]::-webkit-slider-thumb:active{ transform:scale(1.14);}
+  input[type=range]::-moz-range-thumb{ width:17px; height:17px; border:none; border-radius:50%;
+    background:#fff; box-shadow:0 0 0 4px rgba(95,208,255,.25); cursor:pointer;}
+
+  /* 뷰 영역 — 우주 | 지구 | 컨트롤(오른쪽) */
+  .views{display:grid; grid-template-columns:1fr 1fr 200px; gap:14px; align-items:start;}
+  /* 좁은 화면: 컨트롤을 두 뷰 아래 가로 바로 되돌린다 */
+  @media (max-width:980px){
+    .views{grid-template-columns:1fr 1fr;}
+    .controls{grid-column:1 / -1; flex-direction:row; flex-wrap:wrap;
+      align-items:center; justify-content:flex-end; gap:10px 16px;}
+    .controls .ctitle{display:none;}
+    .controls .group{flex-direction:row; align-items:center; gap:8px;}
+    .controls .btnrow{gap:8px;}
+    .controls #seek{width:200px;} .controls #speed{width:150px;}
+    .controls button.play{width:auto;}
+  }
+  @media (max-width:860px){ .views{grid-template-columns:1fr;} }
+  @media (max-width:600px){ .controls{justify-content:center;} }
+  .card{
+    border-radius:16px; padding:13px; position:relative; overflow:hidden;
+  }
+  .card h2{font-size:1rem; margin:2px 4px 10px; display:flex; align-items:center; gap:8px; font-weight:700;}
+  .card h2 .tag{font-size:.72rem; color:#04121c; font-weight:700;
+    background:linear-gradient(180deg,#8fe1ff,#5fd0ff);
+    padding:3px 9px; border-radius:20px; box-shadow:0 2px 8px rgba(95,208,255,.3);}
+  canvas{width:100%; height:auto; display:block; border-radius:12px; background:#05070f;
+    box-shadow:inset 0 0 0 1px rgba(130,160,235,.14), inset 0 0 40px rgba(0,0,0,.5);}
+
+  /* 설명 패널 */
+  .info{ margin-top:14px; border-radius:16px; padding:15px 17px; }
+  .info .status{font-size:1.08rem; font-weight:800; margin-bottom:6px;}
+  .info .desc{color:var(--muted); font-size:.9rem; line-height:1.6;}
+  .warn{display:block; margin-top:11px; padding:10px 13px; border-radius:11px;
+    background:linear-gradient(180deg, rgba(90,26,18,.6), rgba(60,18,14,.6));
+    color:#ffc0ad; border:1px solid rgba(255,110,77,.4);
+    font-size:.88rem; font-weight:700; line-height:1.5;
+    box-shadow:inset 0 1px 0 rgba(255,150,120,.12), 0 4px 16px rgba(255,80,50,.14);}
+  .badge{display:inline-block; padding:3px 11px; border-radius:20px; font-size:.8rem; font-weight:800; margin-left:6px;}
+  .badge.solar{background:rgba(255,210,74,.16); color:var(--accent); border:1px solid rgba(255,210,74,.35);}
+  .badge.lunar{background:rgba(255,106,77,.16); color:#ff9b86; border:1px solid rgba(255,106,77,.35);}
+  .badge.none{background:rgba(120,140,200,.14); color:var(--muted); border:1px solid var(--line);}
+  .legend{display:flex; flex-wrap:wrap; gap:12px; font-size:.8rem; color:var(--muted);}
+  .card .legend{margin-top:9px; padding-top:2px;}
+  .legend span{display:flex; align-items:center; gap:6px;}
+  .dot{width:12px; height:12px; border-radius:50%; display:inline-block;}
+  /* 식 진행 5단계 */
+  .stages{display:flex; gap:8px; margin-top:14px; border-radius:16px; padding:13px;}
+  .stage{flex:1; display:flex; flex-direction:column; align-items:center; gap:8px; text-align:center;
+    padding:11px 3px; border-radius:13px; border:1px solid transparent; cursor:pointer;
+    transition:transform .28s cubic-bezier(.2,.8,.2,1), background .28s ease, border-color .28s ease, box-shadow .28s ease;}
+  .stage:hover{background:var(--panel2); border-color:var(--accent2); transform:translateY(-2px);}
+  .stage .sicon{width:40px; height:40px; border-radius:50%; background:#05070f;
+    border:1px solid var(--line); transition:box-shadow .28s ease, transform .28s ease;}
+  .stage .slabel{font-size:.82rem; line-height:1.25; color:var(--muted); transition:color .28s ease;}
+  .stage.active{background:linear-gradient(180deg, rgba(255,210,74,.14), rgba(255,180,40,.06));
+    border-color:rgba(255,210,74,.6); transform:translateY(-3px) scale(1.03);
+    box-shadow:0 10px 26px rgba(255,180,40,.16), inset 0 1px 0 var(--glass-hi);
+    animation:stagePop .42s cubic-bezier(.2,.9,.2,1);}
+  .stage.active .sicon{border-color:var(--accent);
+    box-shadow:0 0 0 2px rgba(255,210,74,.3), 0 0 18px rgba(255,210,74,.5);}
+  .stage.active .slabel{color:#fff; font-weight:800;}
+  @keyframes stagePop{ 0%{transform:translateY(-3px) scale(.9);} 55%{transform:translateY(-3px) scale(1.09);} 100%{transform:translateY(-3px) scale(1.03);} }
+  @media(max-width:560px){ .stage{padding:8px 2px;} .stage .slabel{font-size:.7rem;} .stage .sicon{width:32px; height:32px;} }
+  /* 접기/펼치기 참고 설명 */
+  .refs{margin-top:15px; border-top:1px solid var(--line); padding-top:13px; display:flex; flex-direction:column; gap:9px;}
+  details.ref{background:rgba(36,48,86,.4); border:1px solid var(--line); border-radius:12px; overflow:hidden;
+    transition:border-color .2s ease, box-shadow .2s ease;}
+  details.ref[open]{border-color:rgba(95,208,255,.3); box-shadow:0 6px 20px rgba(0,0,0,.28);}
+  details.ref>summary{cursor:pointer; list-style:none; padding:13px 15px; font-size:1rem; font-weight:700;
+    color:var(--text); display:flex; align-items:center; gap:9px; user-select:none; transition:background .2s ease;}
+  details.ref>summary::-webkit-details-marker{display:none;}
+  details.ref>summary::before{content:'▶'; font-size:.75rem; color:var(--accent2); transition:transform .25s ease;}
+  details.ref[open]>summary::before{transform:rotate(90deg);}
+  details.ref>summary:hover{background:rgba(255,255,255,.04);}
+  .ref-body{padding:2px 16px 16px; color:var(--muted); font-size:.88rem; line-height:1.7;}
+  .refdiag{display:block; width:100%; max-width:360px; height:auto; margin:2px auto 12px;
+    background:#0a1020; border:1px solid var(--line); border-radius:11px;}
+  .disclaimer{margin:16px 2px 4px; font-size:.8rem; color:var(--muted); line-height:1.5; text-align:center;}
+  /* 좁은 모바일 화면 대응: 하단 텍스트·레이블 폰트 축소 (모든 기본 규칙 뒤에 두어 우선 적용) */
+  @media(max-width:480px){
+    body{padding:10px;}
+    h1{font-size:1.15rem;}
+    .sub{font-size:.78rem;}
+    .controls{gap:7px; padding:10px;}
+    .group .lbl{font-size:.76rem;}
+    button{padding:6px 10px; font-size:.82rem;}
+    #seek, input[type=range]{width:130px;}
+    .card h2{font-size:.9rem;}
+    .info .status{font-size:.95rem;}
+    .info .desc{font-size:.82rem;}
+    .warn{font-size:.8rem; padding:7px 9px;}
+    .legend{font-size:.72rem;}
+    .stage .slabel{font-size:.66rem;}
+    details.ref>summary{font-size:.9rem; padding:10px 12px;}
+    .ref-body{font-size:.8rem; padding:2px 12px 12px;}
+    .disclaimer{font-size:.72rem;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🌒 일식과 월식 시뮬레이션</h1>
+  <div class="sub">중학교 1학년 · 태양계 | 태양–지구–달의 위치에 따라 일식과 월식이 어떻게 일어나는지 관찰해 보세요.</div>
+
+  <!-- 두 개의 뷰 + 오른쪽 컨트롤 -->
+  <div class="views">
+    <div class="card">
+      <h2>🛰️ 우주에서 본 모습 <span class="tag">태양–지구–달 배치</span></h2>
+      <canvas id="space" width="1040" height="720"></canvas>
+    </div>
+    <div class="card">
+      <h2 id="earthTitle">🌍 지구에서 본 모습 <span class="tag" id="earthTag">일식 진행</span></h2>
+      <canvas id="earth" width="1040" height="720"></canvas>
+    </div>
+
+    <!-- 컨트롤 (지구 뷰 오른쪽) -->
+    <div class="controls">
+      <div class="ctitle">🎛️ 조작</div>
+      <div class="group">
+        <span class="lbl">관측 대상</span>
+        <div class="btnrow">
+          <button id="btnSolar" class="active">☀️ 일식</button>
+          <button id="btnLunar">🌕 월식</button>
+        </div>
+      </div>
+      <div class="group">
+        <button id="btnPlay" class="play">⏸ 정지</button>
+      </div>
+      <div class="group">
+        <span class="lbl">위치</span>
+        <input id="seek" type="range" min="0" max="1" step="0.001" value="0">
+      </div>
+      <div class="group">
+        <span class="lbl">속도</span>
+        <input id="speed" type="range" min="1" max="40" value="4">
+      </div>
+    </div>
+  </div>
+
+  <!-- 식 진행 5단계 -->
+  <div class="stages" id="stages">
+    <div class="stage" data-stage="1"><canvas class="sicon" width="72" height="72"></canvas><span class="slabel">식 시작 전</span></div>
+    <div class="stage" data-stage="2"><canvas class="sicon" width="72" height="72"></canvas><span class="slabel">부분식</span></div>
+    <div class="stage" data-stage="3"><canvas class="sicon" width="72" height="72"></canvas><span class="slabel">개기</span></div>
+    <div class="stage" data-stage="4"><canvas class="sicon" width="72" height="72"></canvas><span class="slabel">부분식</span></div>
+    <div class="stage" data-stage="5"><canvas class="sicon" width="72" height="72"></canvas><span class="slabel">식 종료</span></div>
+  </div>
+
+  <!-- 설명 -->
+  <div class="info">
+    <div class="status" id="statusLine">상태를 불러오는 중…</div>
+    <div class="desc" id="descLine"></div>
+    <div class="refs">
+      <details class="ref">
+        <summary>💡 왜 매달 일식·월식이 일어나지 않을까?</summary>
+        <div class="ref-body">
+          <svg class="refdiag" viewBox="0 0 340 150">
+            <!-- 황도면(지구가 태양을 도는 평면) -->
+            <line x1="46" y1="78" x2="330" y2="78" stroke="#6b769e" stroke-width="1.4" stroke-dasharray="6 4"/>
+            <text x="250" y="94" fill="#8f9bc4" font-size="11">황도면</text>
+            <!-- 태양 -->
+            <circle cx="36" cy="78" r="15" fill="#ffd23f"/>
+            <text x="20" y="112" fill="#ffd23f" font-size="11">태양</text>
+            <!-- 지구 -->
+            <circle cx="214" cy="78" r="11" fill="#3f7fc4" stroke="#8fb8ff" stroke-width="0.6"/>
+            <text x="200" y="110" fill="#bcd3ff" font-size="11">지구</text>
+            <!-- 기울어진 달 궤도(지구를 지남) -->
+            <line x1="120" y1="120" x2="308" y2="30" stroke="#c9cede" stroke-width="1.3"/>
+            <text x="250" y="34" fill="#c9cede" font-size="11">달 궤도(약 5°)</text>
+            <!-- 삭 위치의 달: 궤도가 기울어 황도면 아래에 있음 -->
+            <circle cx="150" cy="105" r="7" fill="#e2e4ec"/>
+            <text x="130" y="126" fill="#e2e4ec" font-size="10.5">달(삭)</text>
+            <!-- 달 그림자: 태양 반대(오른쪽)로 나가며 지구를 빗나감 -->
+            <line x1="157" y1="105" x2="270" y2="105" stroke="#d68a55" stroke-width="1.4" stroke-dasharray="3 3"/>
+            <path d="M262,101 l8,4 l-8,4" fill="none" stroke="#d68a55" stroke-width="1.4"/>
+            <text x="176" y="101" fill="#d68a55" font-size="10">그림자가 지구 아래로 빗나감</text>
+          </svg>
+          달의 공전 궤도면이 지구의 공전 궤도면(<b>황도면</b>)에 대해 약 <b>5° 기울어져</b> 있어요.
+          그래서 삭·망이 되어도 달이 보통 황도면보다 <b>위나 아래</b>에 있어, 그림자가 서로를 <b>빗나갑니다.</b>
+          달이 <b>황도면과 만나는 지점</b>에서 삭·망이 될 때만 일직선이 되어 식이 일어나기 때문에 드물어요.
+        </div>
+      </details>
+      <details class="ref">
+        <summary>🔴 개기월식 때 달은 왜 붉게 보일까?</summary>
+        <div class="ref-body">
+          <svg class="refdiag" viewBox="0 0 360 152">
+            <!-- 태양 -->
+            <circle cx="24" cy="78" r="15" fill="#ffd23f"/>
+            <text x="9" y="112" fill="#ffd23f" font-size="11">태양</text>
+            <!-- 햇빛(평행) -->
+            <line x1="40" y1="54" x2="150" y2="54" stroke="#ffe08a" stroke-width="1.3"/>
+            <line x1="40" y1="102" x2="150" y2="102" stroke="#ffe08a" stroke-width="1.3"/>
+            <!-- 지구 + 대기 -->
+            <circle cx="172" cy="78" r="24" fill="#2e6fb0"/>
+            <circle cx="172" cy="78" r="29" fill="none" stroke="#7fc8ff" stroke-width="3.5" opacity="0.5"/>
+            <text x="158" y="122" fill="#bcd3ff" font-size="11">지구</text>
+            <text x="128" y="44" fill="#7fc8ff" font-size="9.5">대기(공기)</text>
+            <!-- 붉은 빛: 대기 통과하며 그림자 속으로 굴절 → 달 -->
+            <path d="M150,54 Q210,64 302,74" fill="none" stroke="#e0533a" stroke-width="1.9"/>
+            <path d="M150,102 Q210,92 302,82" fill="none" stroke="#e0533a" stroke-width="1.9"/>
+            <text x="205" y="60" fill="#ff8a6b" font-size="10">붉은 빛(굴절)</text>
+            <!-- 파란 빛은 산란(흩어짐) -->
+            <line x1="150" y1="54" x2="182" y2="32" stroke="#8fd0ff" stroke-width="1.2" stroke-dasharray="2 2"/>
+            <line x1="150" y1="102" x2="182" y2="124" stroke="#8fd0ff" stroke-width="1.2" stroke-dasharray="2 2"/>
+            <text x="120" y="146" fill="#8fd0ff" font-size="9.5">파란 빛은 흩어져 사라짐</text>
+            <!-- 달(그림자 속, 붉음) -->
+            <circle cx="318" cy="78" r="13" fill="#b0432e" stroke="#d9694a" stroke-width="0.8"/>
+            <text x="300" y="112" fill="#ff9b86" font-size="11">붉은 달</text>
+          </svg>
+          개기월식 때 달이 지구 <b>본그림자</b>에 완전히 들어가도 깜깜해지지 않고 <b>붉게</b> 보입니다.
+          지구 <b>대기(공기)</b>를 통과한 햇빛 중 <b>붉은 빛</b>은 살짝 <b>굴절(휘어져)</b>되어 그림자 속 달까지 닿지만,
+          <b>파란 빛</b>은 공기 입자에 부딪혀 흩어져 버리기 때문이에요.
+          그래서 <b>지구의 모든 노을빛</b>이 달에 비친 것처럼 붉게 보이며, 이를 <b>‘붉은 달(블러드문)’</b>이라고 합니다.
+        </div>
+      </details>
+      <details class="ref">
+        <summary>⏱️ 왜 월식이 일식보다 오래 이어질까?</summary>
+        <div class="ref-body">
+          <svg class="refdiag" viewBox="0 0 340 214">
+            <!-- ── 일식: 달과 태양의 겉보기 크기가 비슷 → 지나갈 거리가 짧다 ── -->
+            <text x="6" y="42" fill="#ffd23f" font-size="12" font-weight="bold">일식</text>
+            <text x="6" y="58" fill="#8f9bc4" font-size="9.5">약 2시간 반</text>
+            <circle cx="170" cy="48" r="15" fill="#ffd23f"/>
+            <text x="170" y="22" fill="#ffd23f" font-size="10" text-anchor="middle">태양</text>
+            <circle cx="140" cy="48" r="15" fill="#c9cede" fill-opacity=".3" stroke="#e2e4ec" stroke-width="1" stroke-dasharray="3 2"/>
+            <circle cx="200" cy="48" r="15" fill="#c9cede" fill-opacity=".3" stroke="#e2e4ec" stroke-width="1" stroke-dasharray="3 2"/>
+            <line x1="140" y1="78" x2="200" y2="78" stroke="#57d38c" stroke-width="1.6"/>
+            <path d="M194,74 l7,4 l-7,4" fill="none" stroke="#57d38c" stroke-width="1.6"/>
+            <path d="M146,74 l-7,4 l7,4" fill="none" stroke="#57d38c" stroke-width="1.6"/>
+            <text x="210" y="82" fill="#57d38c" font-size="10">달 지름 2개분</text>
+            <!-- ── 월식: 지구 본그림자가 훨씬 크다 → 지나갈 거리가 길다 ── -->
+            <text x="6" y="142" fill="#ff9b86" font-size="12" font-weight="bold">월식</text>
+            <text x="6" y="158" fill="#8f9bc4" font-size="9.5">약 5시간</text>
+            <text x="170" y="102" fill="#aab0c4" font-size="10" text-anchor="middle">지구 본그림자 (달의 2.6배)</text>
+            <circle cx="170" cy="148" r="39" fill="#24222c" stroke="#6b769e" stroke-width="1" stroke-dasharray="4 3"/>
+            <circle cx="116" cy="148" r="15" fill="#c9cede" fill-opacity=".3" stroke="#e2e4ec" stroke-width="1" stroke-dasharray="3 2"/>
+            <circle cx="224" cy="148" r="15" fill="#c9cede" fill-opacity=".3" stroke="#e2e4ec" stroke-width="1" stroke-dasharray="3 2"/>
+            <line x1="116" y1="196" x2="224" y2="196" stroke="#57d38c" stroke-width="1.6"/>
+            <path d="M218,192 l7,4 l-7,4" fill="none" stroke="#57d38c" stroke-width="1.6"/>
+            <path d="M122,192 l-7,4 l7,4" fill="none" stroke="#57d38c" stroke-width="1.6"/>
+            <text x="234" y="200" fill="#57d38c" font-size="10">3.6개분</text>
+          </svg>
+          식이 이어지는 시간은 <b>달이 그것을 완전히 통과하는 데 걸리는 시간</b>이에요.
+          달이 움직이는 속도는 두 경우가 같으니, <b>지나가야 할 거리</b>가 시간을 정합니다.
+          <br>일식에서 달이 가리는 <b>태양</b>은 달과 겉보기 크기가 거의 같아요(둘 다 약 0.5°).
+          그래서 첫 접촉부터 마지막 접촉까지 <b>달 지름 2개</b>만큼만 움직이면 끝납니다.
+          <br>반면 월식에서 달이 통과하는 <b>지구의 본그림자</b>는 달보다 약 <b>2.6배</b>나 커요.
+          그래서 <b>달 지름 3.6개</b>를 지나가야 하고, 그만큼 시간도 두 배 가까이 걸립니다.
+          <br>또 일식은 달의 좁은 그림자가 스쳐 가는 지역에서만 잠깐 보이지만,
+          월식은 <b>밤인 곳이라면 어디서나</b> 처음부터 끝까지 볼 수 있어요.
+        </div>
+      </details>
+    </div>
+  </div>
+  <p class="disclaimer">※ 천체의 크기와 거리는 이해를 돕기 위해 축소·과장되어 있습니다.</p>
+</div>
+
+<script>
+/* ===================== 기본 설정 ===================== */
+const spaceCv = document.getElementById('space');
+const earthCv = document.getElementById('earth');
+const sctx = spaceCv.getContext('2d');
+const ectx = earthCv.getContext('2d');
+
+// 고해상도 대응
+function fitDPR(cv, ctx){
+  const dpr = window.devicePixelRatio || 1;
+  const rect = cv.getBoundingClientRect();
+  cv.width = Math.round(rect.width * dpr);
+  cv.height = Math.round(rect.width * 0.69 * dpr); // 가로:세로 = 1 : 0.69
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {w:rect.width, h:rect.width*0.69};
+}
+
+/* ===== 실제 하늘의 각속도 기준값 (이 값들로부터 식 진행 속도를 계산한다) =====
+   · 지구 자전 : 24시간에 360° → 15°/시.  이 때문에 모든 천체가 하루에 한 번 동→서로 돈다.
+     화면의 일주호(동쪽 지평선 → 남중 → 서쪽 지평선)는 지구가 180° 자전하는 '12시간'에 해당.
+   · 달의 공전 : 태양(또는 지구 그림자)에 대해 하루 약 12.2° = 0.51°/시 만큼 동쪽으로 이동.
+   → 자전이 달의 상대 운동보다 약 30배 빠르다. 그래서 식이 진행되는 동안에도
+     태양·달은 자전 때문에 계속 서쪽으로 흘러가고, 식 자체는 2~4시간 만에 끝난다. */
+const ARC_HOURS         = 12;      // 일주호 전체(뜸→짐) = 지구 자전 180° = 12시간
+const EARTH_SPIN_DEG_H  = 15;      // 지구 자전 각속도(°/시)
+const MOON_REL_DEG_H    = 0.5079;  // 달의 상대 이동 각속도(°/시, 삭망월 29.53일 기준)
+// 겉보기 반지름(도)
+const SUN_ANG_R   = 0.266;         // 태양
+const MOON_ANG_R  = 0.259;         // 달
+const UMBRA_ANG_R = 0.673;         // 달 위치에서의 지구 본그림자 (달의 약 2.6배)
+/* 식의 전체 진행시간(첫 접촉 ~ 마지막 접촉).
+   지구 중심에서 계산하면 일식 2*(0.266+0.259)/0.51 ≈ 2.1시간, 월식 2*(0.673+0.259)/0.51 ≈ 3.7시간이
+   나오지만, 실제로 땅 위의 관측자는 자전에 실려 함께 움직이고 월식은 반그림자 단계까지 이어지므로
+   보통 일식 약 2시간 반, 월식 약 5시간으로 관측된다. 그 값을 기준으로 삼는다. */
+const SOLAR_HOURS = 2.5;           // 일식 전체 진행시간
+const LUNAR_HOURS = 5.0;           // 월식 전체 진행시간
+// 일주호 매개변수 t로 환산 (일주호 전체 = 12시간)
+const SOLAR_SPAN = SOLAR_HOURS/ARC_HOURS;   // ≈0.208
+const LUNAR_SPAN = LUNAR_HOURS/ARC_HOURS;   // ≈0.417
+// 첫 접촉 시각(t). 식 최대(남중, t=0.5)의 앞뒤로 span/2 씩.
+const firstContact = m => 0.5 - (m==='solar'?SOLAR_SPAN:LUNAR_SPAN)/2;
+
+/* ===== 우주에서 본 모습의 기하 (캔버스 짧은 변에 대한 비율) =====
+   실제 달까지의 거리는 지구 반지름의 약 60배다. 그대로 그리면 지구가 점만 해져서
+   관측자도 그림자 띠도 보이지 않으므로, 시뮬레이션에서는 7배로 줄여(=지구를 크게 과장해) 그린다.
+   그만큼 달의 공전 '각도'는 실제보다 크게 보인다(자전:공전 ≈ 2.6:1, 실제는 27:1). */
+const K_ORB = 0.460;                              // 달 공전 반지름 (화면에 들어가는 최대치)
+const K_RE  = K_ORB/7;                            // 지구 반지름 — 알아보기 쉽도록 크게 과장
+const K_RM  = K_RE*0.28;                          // 달 반지름 (실제 비 0.27)
+const K_PEN_SLOPE = (0.553*K_RE-K_RM)/K_ORB;      // 달 반그림자가 퍼지는 기울기
+const K_SOFF = K_RM + K_PEN_SLOPE*(K_ORB-K_RE);   // 지구 표면에서의 반그림자 반폭
+const K_UMB_MOON = 0.72*K_RE;                     // 달 거리에서의 지구 본그림자 반폭
+const K_LUNOFF = K_UMB_MOON + K_RM;               // 월식 첫 접촉 때의 어긋난 거리
+
+/* 달의 공전 각속도(일주호 1회=12시간 동안 도는 각도).
+   관측자는 자전으로 12시간에 정확히 180° 움직인다(15°/시, 실제 값).
+   그 '자전'과 '공전'의 상대 운동만으로 식이 정확히 SOLAR_HOURS·LUNAR_HOURS 동안
+   진행되도록 공전 각도를 역으로 정한다. → 아래 eclipseU() 가 두 운동에서 식 진행을 만든다. */
+const RAD = Math.PI/180;
+const MOON_W_SOLAR = (2/SOLAR_SPAN)*Math.asin((K_SOFF+K_RE*Math.sin(90*SOLAR_SPAN*RAD))/K_ORB)/RAD;
+const MOON_W_LUNAR = (2/LUNAR_SPAN)*Math.asin(K_LUNOFF/K_ORB)/RAD;
+const moonW = m => m==='solar' ? MOON_W_SOLAR : MOON_W_LUNAR;
+
+/* 식 진행 매개변수 u : -1=첫 접촉 · 0=식 최대 · +1=마지막 접촉
+   ── 시간에서 곧바로 계산하지 않고, '자전으로 움직인 관측자'와 '공전으로 움직인 달'의
+      어긋난 거리에서 구한다. 그래서 우주에서 본 두 운동과 식 진행이 언제나 일치한다. */
+function eclipseU(){
+  const tau=state.t-0.5;
+  if(state.mode==='solar'){
+    const oy=K_RE *Math.sin(180*tau*RAD);              // 자전으로 움직인 관측자
+    const my=K_ORB*Math.sin(MOON_W_SOLAR*tau*RAD);     // 공전으로 움직인 달(=그림자 축)
+    return (my-oy)/K_SOFF;                             // 둘이 어긋난 정도
+  }
+  return K_ORB*Math.sin(MOON_W_LUNAR*tau*RAD)/K_LUNOFF; // 월식은 어디서 보나 같다
+}
+/* 하늘에 그릴 때의 간격. 식이 진행되는 동안(|u|≤1)은 실제 간격 그대로 쓰고,
+   그 바깥에서는 간격을 눌러 준다. 원반이 실제보다 크게 그려져 있어 그대로 두면
+   식이 시작되기 훨씬 전에 달(또는 그림자)이 하늘 저편까지 벌어져 보이기 때문이다. */
+function drawU(u){
+  const a=Math.abs(u);
+  return a<=1 ? u : (u<0?-1:1)*(1+Math.log(a));
+}
+/* 가림 정도(0~1)를 u만으로 계산한다. 지구에서 본 모습·우주에서 본 모습이 이 함수를
+   함께 쓰므로 두 화면의 식 진행이 언제나 정확히 같다. */
+const MOON_SUN_RATIO = 1.02;   // 달/태양 겉보기 크기 비(달이 살짝 커야 완전히 가려짐)
+const UMBRA_MOON_RATIO = 2.6;  // 지구 본그림자/달 크기 비
+const PENUM_MOON_RATIO = 4.6;  // 지구 반그림자/달 크기 비
+function coverAt(mode,u){
+  const [ra,rb] = mode==='solar' ? [1,MOON_SUN_RATIO] : [1,UMBRA_MOON_RATIO];
+  return overlapArea(ra,rb,Math.abs(u)*(ra+rb))/(Math.PI*ra*ra);
+}
+// 월식에서 달이 지구 반그림자에 걸쳐 있는가(=반영월식, 달이 조금 어두워지는 단계)
+function inPenumbra(u){
+  return Math.abs(u)*(1+UMBRA_MOON_RATIO) < 1+PENUM_MOON_RATIO;
+}
+// 기본 속도(4)에서 '시뮬레이션 1시간 = 6초' → 일주호 12시간 = 72초
+const SEC_PER_SIM_HOUR = 6;
+let state = {
+  mode:'solar',      // 'solar' | 'lunar'
+  t:0,               // 동쪽 지평선에서 떠오르는 순간부터 시작
+                     // 애니메이션 매개변수(0~1). 일주운동 위치 + 식 진행을 함께 나타냄
+                     //   일식: 0.414=첫 접촉 · 0.5=남중(개기) · 0.586=마지막 접촉 · 1=서(짐)
+  playing:true,      // 시작하자마자 자동 재생
+  speed:4
+};
+// 시뮬레이션 시각(문자열). 일식은 06시 출→12시 남중→18시 몰,
+// 월식(보름달)은 18시 출→24시 남중→06시 몰 — 자전 15°/시에 맞춘 실제 시각.
+function clockText(){
+  const hr=((state.mode==='solar'?6:18)+state.t*ARC_HOURS)%24;
+  const H=Math.floor(hr), M=Math.floor((hr-H)*60);
+  return `${String(H).padStart(2,'0')}:${String(M).padStart(2,'0')}`;
+}
+// 식 진행 위상(-0.5~0.5, 0=남중=식 최대)
+function eclipsePhase(){ return state.t-0.5; }
+
+/* ===================== 유틸 ===================== */
+const D2R = Math.PI/180;
+function norm180(a){ a=((a%360)+360)%360; return a>180? a-360 : a; } // -180~180
+function clamp(v,lo,hi){ return v<lo?lo:v>hi?hi:v; }
+// 두 원의 겹치는 넓이
+function overlapArea(r0,r1,d){
+  if(d>=r0+r1) return 0;
+  if(d<=Math.abs(r0-r1)) return Math.PI*Math.min(r0,r1)**2;
+  const r02=r0*r0, r12=r1*r1;
+  const a0=Math.acos((d*d+r02-r12)/(2*d*r0));
+  const a1=Math.acos((d*d+r12-r02)/(2*d*r1));
+  return r02*(a0-Math.sin(2*a0)/2)+r12*(a1-Math.sin(2*a1)/2);
+}
+
+/* ===================== 천구(하늘 반구) 그리기 =====================
+   관측자가 남쪽 하늘을 바라본 모습.
+   지평선 위: 동(왼쪽) · 남(정면) · 서(오른쪽)  /  천정은 머리 위.
+   천체는 일주운동으로 동→남중(가장 높음)→서로 이동한다. */
+function drawDome(ctx,w,h,opt){
+  const night = opt.night, dark = opt.dark||0;
+  const g=domeGeom(w,h);
+  const yH=g.yH, peakY=g.peakY, xE=g.xE, xW=g.xW, cx=g.cx, cy=peakY;
+  const Robj = Math.min(w,h)*0.15;
+
+  // 하늘
+  let topC, botC;
+  if(night){ topC='#04091a'; botC='#0a1430'; }
+  else{ topC=mix('#5fb8f0','#05070f',dark); botC=mix('#c3e8ff','#0a1020',dark); }
+  const sky=ctx.createLinearGradient(0,0,0,yH);
+  sky.addColorStop(0,topC); sky.addColorStop(1,botC);
+  ctx.fillStyle=sky; ctx.fillRect(0,0,w,yH+2);
+
+  // 별(밤하늘 또는 개기일식 때 서서히 드러남) — 다채로운 별밭을 지평선 위 하늘에만
+  if(night || dark>0.90){
+    const al = night ? 0.9 : 0.9*Math.min(1,(dark-0.90)/0.10);   // 개기로 갈수록 부드럽게 등장
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0,0,w,yH); ctx.clip();            // 지평선 위에만
+    drawStarfield(ctx,w,yH,70,al);
+    ctx.restore();
+  }
+
+  // 자오선(남중선) : 천정~남을 잇는 수직 점선
+  ctx.strokeStyle='rgba(255,255,255,.16)'; ctx.setLineDash([4,5]); ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(cx,h*0.06); ctx.lineTo(cx,yH); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // 일주운동 경로(동→서 호)
+  ctx.strokeStyle='rgba(255,255,255,.30)'; ctx.setLineDash([6,6]); ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(xE,yH); ctx.quadraticCurveTo(cx, 2*peakY-yH, xW, yH); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // 지평선
+  ctx.strokeStyle='rgba(255,255,255,.6)'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(0,yH); ctx.lineTo(w,yH); ctx.stroke();
+
+  // 지표면(땅)
+  let g1,g2;
+  if(night){ g1='#141a10'; g2='#080b05'; }
+  else{ g1=mix('#3f7233','#0c140a',dark); g2=mix('#2a5220','#080c06',dark); }
+  const gr=ctx.createLinearGradient(0,yH,0,h);
+  gr.addColorStop(0,g1); gr.addColorStop(1,g2);
+  ctx.fillStyle=gr; ctx.fillRect(0,yH,w,h-yH);
+  // 언덕 실루엣
+  ctx.fillStyle=night?'rgba(0,0,0,.45)':'rgba(0,0,0,.22)';
+  ctx.beginPath(); ctx.moveTo(0,yH); ctx.quadraticCurveTo(w*0.20,yH-12,w*0.42,yH); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(w*0.58,yH); ctx.quadraticCurveTo(w*0.82,yH-16,w,yH); ctx.closePath(); ctx.fill();
+
+  // 관측자
+  drawObserver(ctx,cx,yH,h);
+
+  // 천정
+  ctx.fillStyle='rgba(255,255,255,.85)'; ctx.font='11px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+  ctx.fillText('천정(머리 위)', cx, h*0.05);
+
+  // 방위 라벨(지평선 위)
+  drawHorizonDir(ctx,'동',xE,yH,'#4fc3f7');
+  drawHorizonDir(ctx,'남',cx,yH,'#ffd23f');
+  drawHorizonDir(ctx,'서',xW,yH,'#4fc3f7');
+
+  return {cx,cy,Robj,xE,xW,yH,peakY};
+}
+
+// 관측자(막대 사람)
+function drawObserver(ctx,x,yH,h){
+  const gy=yH+(h-yH)*0.55;
+  ctx.save();
+  ctx.strokeStyle='rgba(255,255,255,.9)'; ctx.fillStyle='rgba(255,255,255,.9)'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(x,gy-11,3.4,0,7); ctx.fill();            // 머리
+  ctx.beginPath();
+  ctx.moveTo(x,gy-7); ctx.lineTo(x,gy+1);                          // 몸
+  ctx.moveTo(x,gy-4); ctx.lineTo(x-5,gy-1); ctx.moveTo(x,gy-4); ctx.lineTo(x+5,gy-1); // 팔
+  ctx.moveTo(x,gy+1); ctx.lineTo(x-4,gy+8); ctx.moveTo(x,gy+1); ctx.lineTo(x+4,gy+8); // 다리
+  ctx.stroke();
+  ctx.font='10px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+  ctx.fillText('관측자', x, gy+20);
+  ctx.restore();
+}
+
+// 지평선 위 방위 라벨
+function drawHorizonDir(ctx,label,x,yH,color){
+  ctx.save();
+  ctx.strokeStyle='rgba(255,255,255,.75)'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(x,yH-5); ctx.lineTo(x,yH+5); ctx.stroke();
+  ctx.fillStyle='rgba(8,12,26,.75)';
+  ctx.fillRect(x-13,yH-25,26,17);
+  ctx.fillStyle=color; ctx.font='bold 14px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(label,x,yH-16);
+  ctx.restore();
+}
+
+// 일주운동 경로(호) 위의 위치. p: 0=동(뜸) · 0.5=남중 · 1=서(짐)
+function arcPoint(p,d){
+  const mt=1-p;
+  return {
+    x: mt*mt*d.xE + 2*mt*p*d.cx + p*p*d.xW,
+    y: mt*mt*d.yH + 2*mt*p*(2*d.peakY-d.yH) + p*p*d.yH
+  };
+}
+// 호의 접선(진행 방향, 동→서). 천체가 이 방향을 따라 하늘을 가로지른다.
+function arcTangent(p,d){
+  const p1y=2*d.peakY-d.yH;
+  let tx=2*(1-p)*(d.cx-d.xE)+2*p*(d.xW-d.cx);
+  let ty=2*(1-p)*(p1y-d.yH)+2*p*(d.yH-p1y);
+  const L=Math.hypot(tx,ty)||1;
+  return {x:tx/L, y:ty/L};
+}
+// 호 위에서 매개변수 1단위당 이동하는 화면 거리(픽셀) — 픽셀 간격을 호 매개변수로 환산할 때 사용
+function arcSpeed(p,d){
+  const p1y=2*d.peakY-d.yH;
+  const tx=2*(1-p)*(d.cx-d.xE)+2*p*(d.xW-d.cx);
+  const ty=2*(1-p)*(p1y-d.yH)+2*p*(d.yH-p1y);
+  return Math.hypot(tx,ty)||1;
+}
+// 천구 기하(지평선·남중·방위 위치) — drawDome과 동일하게 유지
+function domeGeom(w,h){ return {xE:w*0.10, xW:w*0.90, cx:w*0.5, yH:h*0.72, peakY:h*0.33}; }
+/* 우주 뷰의 그림자 원뿔(반그림자=바깥으로 벌어짐, 본그림자=한 점으로 모임)
+   penEnd : x+len 위치에서의 반그림자 반폭(픽셀)
+   umbTip : 본그림자가 한 점으로 모이는 거리(픽셀) — 이 값으로 원뿔의 기울기가 정해진다 */
+function drawShadowCone(ctx, x, y, R, len, penEnd, umbTip){
+  if(len<=0) return;
+  // 반그림자(半影)
+  let g=ctx.createLinearGradient(x,0,x+len,0);
+  g.addColorStop(0,'rgba(104,114,150,.52)'); g.addColorStop(1,'rgba(104,114,150,.22)');
+  ctx.fillStyle=g;
+  ctx.beginPath();
+  ctx.moveTo(x,y-R); ctx.lineTo(x+len,y-penEnd); ctx.lineTo(x+len,y+penEnd); ctx.lineTo(x,y+R);
+  ctx.closePath(); ctx.fill();
+  // 반그림자 경계선 — 어디까지가 반그림자인지 눈에 띄게
+  ctx.strokeStyle='rgba(150,162,205,.55)'; ctx.lineWidth=1; ctx.setLineDash([4,3]);
+  ctx.beginPath();
+  ctx.moveTo(x,y-R); ctx.lineTo(x+len,y-penEnd);
+  ctx.moveTo(x,y+R); ctx.lineTo(x+len,y+penEnd);
+  ctx.stroke(); ctx.setLineDash([]);
+  // 본그림자(本影) — umbTip 에서 폭이 0이 된다
+  const uL=Math.min(len,Math.max(1,umbTip)), uEnd=R*(1-uL/Math.max(1,umbTip));
+  g=ctx.createLinearGradient(x,0,x+uL,0);
+  g.addColorStop(0,'rgba(70,80,116,.92)'); g.addColorStop(1,'rgba(70,80,116,.35)');
+  ctx.fillStyle=g;
+  ctx.beginPath();
+  ctx.moveTo(x,y-R); ctx.lineTo(x+uL,y-uEnd); ctx.lineTo(x+uL,y+uEnd); ctx.lineTo(x,y+R);
+  ctx.closePath(); ctx.fill();
+  // 본그림자가 아주 가늘어도(일식) 어디로 뻗는지 보이도록 윤곽선을 덧그린다
+  ctx.strokeStyle='rgba(150,165,215,.55)'; ctx.lineWidth=1;
+  ctx.beginPath();
+  ctx.moveTo(x,y-R); ctx.lineTo(x+uL,y-uEnd);
+  ctx.moveTo(x,y+R); ctx.lineTo(x+uL,y+uEnd);
+  ctx.stroke();
+}
+/* 일주운동을 '일정한 속도'로 만들기 위한 호 길이 표.
+   베지에 매개변수를 그대로 쓰면 같은 Δt에도 화면 이동량이 구간마다 1.35배까지 달라져
+   천체가 지평선 근처에서 빨라 보인다. 그래서 '호 길이' 기준으로 다시 매개변수화한다. */
+let _lut=null,_lutKey='';
+function arcLUT(d){
+  const key=[d.xE,d.xW,d.yH,d.peakY].join(',');
+  if(_lutKey===key && _lut) return _lut;
+  const N=256, cum=[0]; let prev=arcPoint(0,d);
+  for(let i=1;i<=N;i++){ const pt=arcPoint(i/N,d);
+    cum.push(cum[i-1]+Math.hypot(pt.x-prev.x,pt.y-prev.y)); prev=pt; }
+  _lutKey=key; _lut={cum,N,L:cum[N]}; return _lut;
+}
+// 호 길이 비율 s(0~1) → 호 매개변수
+function paramAtLength(s,d){
+  const t=arcLUT(d), target=clamp(s,0,1)*t.L, c=t.cum;
+  let lo=0,hi=t.N;
+  while(lo<hi-1){ const mid=(lo+hi)>>1; if(c[mid]<=target) lo=mid; else hi=mid; }
+  return (lo+(target-c[lo])/((c[lo+1]-c[lo])||1))/t.N;
+}
+// t(0~1)를 지평선 위로 유지한 호 매개변수로 변환 (화면상 등속)
+function skyParam(t,d){ return paramAtLength(0.08 + t*0.84, d); }
+// 일주운동 진행 상태 텍스트 (남중 구간을 식 최대 구간과 맞춤)
+function diurnalLabel(t){
+  if(t<0.13) return '동쪽에서 떠오르는 중';
+  if(t<0.38) return '떠오르는 중';
+  if(t<0.62) return '남중(가장 높음)';
+  if(t<0.87) return '지는 중';
+  return '서쪽으로 지는 중';
+}
+
+/* 별밭 — 인덱스로 결정적 위치를 만들고, 크기·밝기·색을 다채롭게 + 은은한 반짝임 */
+const _frac = x => x - Math.floor(x);
+function drawStarfield(ctx, w, h, n, alphaMul){
+  const t = performance.now()*0.001;
+  for(let i=0;i<n;i++){
+    const sx=_frac(Math.sin(i*127.1)*43758.5453)*w;
+    const sy=_frac(Math.sin(i*311.7)*24634.6345)*h;
+    const sz=0.6 + (i%7)/7*1.9;                              // 크기 다양
+    const base=0.22 + (i%5)/5*0.72;
+    const tw=0.72 + 0.28*Math.sin(t*(1.1+(i%9)*0.16)+i);    // 반짝임
+    const a=Math.min(1, base*tw)*alphaMul;
+    if(a<=0.01) continue;
+    const sel=i%13;
+    ctx.fillStyle = sel<2 ? `rgba(178,205,255,${a})` : sel<3 ? `rgba(255,232,196,${a})` : `rgba(255,255,255,${a})`;
+    if(sz>1.7){                                              // 밝은 별엔 살짝 글로우
+      const g=ctx.createRadialGradient(sx,sy,0,sx,sy,sz*2.4);
+      g.addColorStop(0,ctx.fillStyle); g.addColorStop(1,'rgba(255,255,255,0)');
+      ctx.fillStyle=g; ctx.beginPath(); ctx.arc(sx,sy,sz*2.4,0,7); ctx.fill();
+    } else {
+      ctx.beginPath(); ctx.arc(sx,sy,sz*0.6,0,7); ctx.fill();
+    }
+  }
+}
+
+/* ===================== 우주에서 본 모습 ===================== */
+function drawSpace(){
+  const {w,h}=fitDPR(spaceCv,sctx);
+  const ctx=sctx;
+  ctx.clearRect(0,0,w,h);
+  // 배경 — 깊이감 있는 우주 + 다채로운 별밭
+  const bgv=ctx.createRadialGradient(w*0.5,h*0.5,0,w*0.5,h*0.5,Math.hypot(w,h)*0.6);
+  bgv.addColorStop(0,'#0a1024'); bgv.addColorStop(0.6,'#060a16'); bgv.addColorStop(1,'#03050d');
+  ctx.fillStyle=bgv; ctx.fillRect(0,0,w,h);
+  drawStarfield(ctx,w,h,120,1);
+
+  const S=Math.min(w,h);
+  const ecx=w*0.62, ecy=h*0.5;      // 지구 중심
+  const Re=S*K_RE;                  // 지구 반지름
+  const Rorbit=S*K_ORB;             // 달 공전 반지름(지구 반지름의 10배)
+  const Rm=S*K_RM;                  // 달 반지름(실제 달/지구 반지름 비 ≈ 0.27)
+
+  /* 태양빛 (왼쪽 → 오른쪽 평행광) */
+  ctx.strokeStyle='rgba(255,210,63,.55)'; ctx.lineWidth=2;
+  for(let i=0;i<7;i++){
+    const yy=h*0.12+i*(h*0.76/6);
+    ctx.beginPath(); ctx.moveTo(0,yy); ctx.lineTo(w*0.24,yy); ctx.stroke();
+    // 화살표
+    ctx.beginPath(); ctx.moveTo(w*0.24,yy); ctx.lineTo(w*0.24-9,yy-5);
+    ctx.lineTo(w*0.24-9,yy+5); ctx.closePath();
+    ctx.fillStyle='rgba(255,210,63,.55)'; ctx.fill();
+  }
+  ctx.fillStyle='#ffd23f'; ctx.font='bold 15px sans-serif'; ctx.textAlign='left';
+  ctx.fillText('☀️ 태양빛', 8, h*0.06);
+
+  /* ── 지구 자전(실제 값 그대로) ──
+     관측자는 일주호 12시간 동안 정확히 180° 회전한다(15°/시). 반시계방향. */
+  const oaDeg = (state.mode==='solar' ? 90 : 270) + 180*state.t;
+  const oa=oaDeg*D2R;
+  const ox=ecx+Re*Math.cos(oa), oy=ecy-Re*Math.sin(oa);   // y 반전 → 반시계방향
+
+  /* ── 달의 공전(일정한 각속도) ──
+     달은 궤도 위를 반시계방향으로 일정하게 돈다. 각속도는 위에서 정한 값으로,
+     '자전하는 관측자'와의 상대 운동이 식을 정확히 2시간 반·5시간 동안 진행시킨다.
+     (삭=180°, 망=0° 에서 정렬) */
+  const aDeg = (state.mode==='solar' ? 180 : 360) + moonW(state.mode)*(state.t-0.5);
+  const a=aDeg*D2R;
+  const mx=ecx+Rorbit*Math.cos(a), my=ecy-Rorbit*Math.sin(a);   // y 반전 → 반시계방향
+
+  /* ── 식 진행 ──
+     두 운동(자전·공전)이 얼마나 어긋났는지에서 곧바로 나온다. 지구에서 본 모습도
+     같은 eclipseU() 를 쓰므로 두 화면의 식 진행은 언제나 일치한다. */
+  const u = eclipseU();
+  const cover = coverAt(state.mode,u);
+  const PEN_SLOPE   = K_PEN_SLOPE;            // 달 반그림자가 퍼지는 기울기(길이에 무관한 비율)
+  const UMB_AT_MOON = S*K_UMB_MOON;           // 달 거리에서의 지구 본그림자 반폭(= 달 반지름의 약 2.6배)
+  const UMB_CONE    = 3.2;                    // 달 본그림자 원뿔을 보이게 늘리는 배수(끝 폭 ≈ 0.69×달)
+  const UMB_AT_EARTH= Rm*(1-1/UMB_CONE);      // 지구에 닿을 때의 본그림자 반폭
+  const sOff = S*K_SOFF;                      // 지구 표면에서의 달 반그림자 반폭
+
+  /* 그림자: 일식이면 '달의' 그림자, 월식이면 '지구의' 그림자만 표시 */
+  if(state.mode==='lunar'){
+    // 지구 본그림자는 달 거리에서 달의 약 2.6배 굵기이고, 그 3.6배 거리에서 한 점으로 모인다.
+    const len=w-ecx-6;
+    drawShadowCone(ctx, ecx, ecy, Re, len, Re*(1+0.3*len/Rorbit), Rorbit/(1-UMB_AT_MOON/Re));
+    ctx.font='10px sans-serif'; ctx.textAlign='left';
+    ctx.fillStyle='rgba(150,160,200,.9)'; ctx.fillText('지구 반그림자', ecx+Re*2.4, ecy-Re*1.35);
+    ctx.fillStyle='rgba(190,198,230,1)'; ctx.fillText('지구 본그림자', ecx+Re*2.4, ecy-Re*0.05);
+  } else {
+    // 달 본그림자는 실제로는 지구 표면에서 거의 한 점으로 모이지만(개기일식대가 좁은 이유),
+    // 그러면 화면에서 보이지 않으므로 원뿔이 조금 더 천천히 좁아지도록 늘려 그린다.
+    // 그림자는 지구까지만 뻗는다(지구가 빛을 막으므로). 지구 표면에서 끊기고,
+    // 정렬이 어긋나 빗나갈 때도 지구 위치에서 멈춘다.
+    const len=ecx-mx;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0,0,w,h);                                   // 화면 전체에서
+    ctx.moveTo(ecx,ecy-Re);                              // 지구(왼쪽 반원)와 그 뒤쪽 띠를 뺀다
+    ctx.arc(ecx,ecy,Re,-Math.PI/2,Math.PI/2,true);
+    ctx.lineTo(w,ecy+Re); ctx.lineTo(w,ecy-Re); ctx.closePath();
+    ctx.clip('evenodd');
+    drawShadowCone(ctx, mx, my, Rm, len, Rm+PEN_SLOPE*len, UMB_CONE*(Rorbit-Re));
+    ctx.restore();
+    ctx.font='10px sans-serif'; ctx.textAlign='left';
+    ctx.fillStyle='rgba(150,160,200,.9)';
+    ctx.fillText('달 반그림자', mx+Rorbit*0.34, my-Rm-PEN_SLOPE*Rorbit*0.34-6);
+    ctx.fillStyle='rgba(190,198,230,1)';
+    ctx.fillText('달 본그림자', mx+Rorbit*0.30, my+Rm*2.6);
+  }
+
+  /* 달의 공전 궤도 */
+  ctx.strokeStyle='rgba(255,255,255,.18)'; ctx.lineWidth=1;
+  ctx.setLineDash([4,4]);
+  ctx.beginPath(); ctx.arc(ecx,ecy,Rorbit,0,7); ctx.stroke();
+  ctx.setLineDash([]);
+  /* 공전 방향(반시계) 화살표 — 궤도 맨 위에서 왼쪽으로 */
+  ctx.fillStyle='rgba(200,210,255,.7)';
+  ctx.beginPath();
+  ctx.moveTo(ecx-10,ecy-Rorbit-6); ctx.lineTo(ecx+2,ecy-Rorbit-10); ctx.lineTo(ecx+2,ecy-Rorbit-2);
+  ctx.closePath(); ctx.fill();
+  ctx.font='10px sans-serif'; ctx.textAlign='left';
+  ctx.fillText('달 공전(반시계)', ecx+8, ecy-Rorbit-4);
+
+  /* 지구 (왼쪽 낮, 오른쪽 밤) — 대기 발광 + 야간 도시 불빛 */
+  // 대기층(뒤쪽 후광)
+  const atmo=ctx.createRadialGradient(ecx,ecy,Re*0.92,ecx,ecy,Re*1.26);
+  atmo.addColorStop(0,'rgba(120,200,255,0)');
+  atmo.addColorStop(0.5,'rgba(120,200,255,.30)');
+  atmo.addColorStop(1,'rgba(120,200,255,0)');
+  ctx.fillStyle=atmo; ctx.beginPath(); ctx.arc(ecx,ecy,Re*1.26,0,7); ctx.fill();
+  ctx.save();
+  ctx.beginPath(); ctx.arc(ecx,ecy,Re,0,7); ctx.clip();
+  const eg=ctx.createLinearGradient(ecx-Re,0,ecx+Re,0);
+  eg.addColorStop(0,'#5aa0e8'); eg.addColorStop(0.42,'#2e6fb0');
+  eg.addColorStop(0.57,'#123a63'); eg.addColorStop(1,'#060e1e');
+  ctx.fillStyle=eg; ctx.fillRect(ecx-Re,ecy-Re,Re*2,Re*2);
+  // 대륙 (낮 쪽)
+  ctx.fillStyle='rgba(94,196,140,.42)';
+  ctx.beginPath(); ctx.arc(ecx-Re*0.32,ecy-Re*0.2,Re*0.36,0,7); ctx.fill();
+  ctx.beginPath(); ctx.arc(ecx-Re*0.02,ecy+Re*0.4,Re*0.26,0,7); ctx.fill();
+  ctx.fillStyle='rgba(80,170,120,.28)';
+  ctx.beginPath(); ctx.arc(ecx+Re*0.16,ecy-Re*0.42,Re*0.2,0,7); ctx.fill();
+  // 야간(오른쪽) 도시 불빛 — 따뜻한 점들 (미세하지만 보이도록)
+  for(let i=0;i<44;i++){
+    const rx=_frac(Math.sin(i*57.3)*1000), ry=_frac(Math.sin(i*91.7)*1000);
+    const px=ecx+Re*(rx*2-1)*0.9, py=ecy+Re*(ry*2-1)*0.9;
+    const night=(px-ecx)/Re;                          // 오른쪽일수록 밤
+    const a=Math.max(0,Math.min(1,(night-0.1)/0.45))*0.95;
+    if(a<=0.03) continue;
+    const rr=Re*(0.03+ (i%3)*0.012);
+    const g=ctx.createRadialGradient(px,py,0,px,py,rr*2.2);
+    g.addColorStop(0,`rgba(255,224,150,${a})`);
+    g.addColorStop(0.5,`rgba(255,190,110,${a*0.5})`);
+    g.addColorStop(1,'rgba(255,180,100,0)');
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(px,py,rr*2.2,0,7); ctx.fill();
+  }
+  ctx.restore();
+  // 낮 쪽 가장자리 밝은 대기 테두리
+  ctx.strokeStyle='rgba(150,215,255,.55)'; ctx.lineWidth=1.4;
+  ctx.beginPath(); ctx.arc(ecx,ecy,Re,0,7); ctx.stroke();
+  ctx.fillStyle='#eaf0ff'; ctx.font='bold 13px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('지구', ecx, ecy+Re+18);
+
+  /* 지구 자전축(23.5° 기울기) — 은은한 점선 + 북극(N)·남극(S) 표시 */
+  const tilt=23.5*D2R, axx=Math.sin(tilt), axy=-Math.cos(tilt);   // 위쪽(북극) 방향
+  ctx.save();
+  ctx.strokeStyle='rgba(180,205,255,.38)'; ctx.lineWidth=1.1; ctx.setLineDash([4,4]);
+  ctx.beginPath();
+  ctx.moveTo(ecx-axx*Re*1.32, ecy-axy*Re*1.32);
+  ctx.lineTo(ecx+axx*Re*1.32, ecy+axy*Re*1.32);
+  ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle='rgba(190,212,255,.75)'; ctx.font='9px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('N', ecx+axx*Re*1.32, ecy+axy*Re*1.32-2);         // 북극(축 위쪽 끝)
+  ctx.fillText('S', ecx-axx*Re*1.32, ecy-axy*Re*1.32+9);         // 남극(축 아래쪽 끝)
+  ctx.fillStyle='rgba(170,195,245,.7)'; ctx.font='8.5px sans-serif';
+  ctx.fillText('자전축 23.5°', ecx+axx*Re*1.32+30, ecy+axy*Re*1.32+2);
+  ctx.restore();
+
+  /* 지구 자전 방향(반시계) 표시 — 자전축에 직각인 적도면을 따라 도는 화살표 */
+  ctx.strokeStyle='rgba(120,200,255,.8)'; ctx.lineWidth=1.8;
+  ctx.beginPath(); ctx.arc(ecx,ecy,Re*0.58,-0.6, 2.0); ctx.stroke();
+  // 화살촉(반시계 진행)
+  const ah=Re*0.58, ahx=ecx+ah*Math.cos(2.0), ahy=ecy-ah*Math.sin(2.0);
+  ctx.fillStyle='rgba(120,200,255,.9)';
+  ctx.beginPath(); ctx.moveTo(ahx,ahy);
+  ctx.lineTo(ahx-6,ahy-2); ctx.lineTo(ahx-1,ahy+6); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='rgba(120,200,255,.9)'; ctx.font='9px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('자전', ecx, ecy-Re*0.58-3);
+
+  /* 그림자가 지구에 닿는 곳 — 여기 있는 지역에서만 일식이 보인다.
+     반그림자가 닿는 띠는 지구 지름의 약 절반(실제 비율)이라 눈에 잘 보이지만,
+     본그림자는 한 점에 가까울 만큼 좁다. 관측자가 이 띠에 들어오고 나가는 순간이
+     지구에서 본 모습의 '첫 접촉/마지막 접촉'과 정확히 같다. */
+  if(state.mode==='solar'){
+    ctx.save();
+    ctx.beginPath(); ctx.arc(ecx,ecy,Re,0,7); ctx.clip();
+    const bg=ctx.createLinearGradient(0,my-sOff,0,my+sOff);
+    bg.addColorStop(0,'rgba(12,16,32,0)'); bg.addColorStop(0.5,'rgba(12,16,32,.62)');
+    bg.addColorStop(1,'rgba(12,16,32,0)');
+    ctx.fillStyle=bg; ctx.fillRect(ecx-Re-1,my-sOff,Re+1,sOff*2);
+    const dyE=my-ecy;
+    if(Math.abs(dyE)<Re){   // 본그림자 끝이 닿는 좁은 지역(개기일식)
+      const hx=ecx-Math.sqrt(Re*Re-dyE*dyE);
+      ctx.fillStyle='rgba(6,8,16,.95)';
+      ctx.beginPath();
+      ctx.ellipse(hx+UMB_AT_EARTH*0.9,my,UMB_AT_EARTH*0.75,UMB_AT_EARTH,0,0,7);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  /* 관측자 (지구 자전에 따라 반시계로 이동 → 지구에서 본 일주운동의 원인)
+     자전 15°/시 → 일주호 12시간 동안 정확히 180° 회전한다(위에서 oa 로 계산).
+     같은 시간에 달은 약 6°만 공전하므로, 하늘에서 보이는 움직임은 대부분 '자전' 때문이다. */
+  const dayside = Math.cos(oa)<0; // 왼쪽(태양쪽)=낮
+  // 관측자 점의 색으로 상태를 나타낸다(지구에서 본 모습과 같은 cover 로 판정)
+  ctx.fillStyle = cover>0.98 ? '#ff7a5c' : cover>0.001 ? '#ffd23f'
+                : (dayside? '#57d38c':'#3aa06a');
+  ctx.beginPath(); ctx.arc(ox,oy,Re*0.30,0,7); ctx.fill();
+  ctx.strokeStyle='#fff'; ctx.lineWidth=1.4; ctx.stroke();
+  // 관측자가 바라보는 방향(천체 쪽)
+  ctx.strokeStyle='rgba(87,211,140,.7)'; ctx.lineWidth=1.5; ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.moveTo(ox,oy); ctx.lineTo(ox+(ox-ecx)*0.9, oy+(oy-ecy)*0.9); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle='rgba(87,211,140,.95)'; ctx.font='10px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('관측자', ox+(ox-ecx)*0.5, oy+(oy-ecy)*0.5 - 6);
+
+  /* 달 */
+  ctx.save();
+  ctx.beginPath(); ctx.arc(mx,my,Rm,0,7); ctx.clip();
+  const mgr=ctx.createLinearGradient(mx-Rm,0,mx+Rm,0);
+  mgr.addColorStop(0,'#e8e8ee'); mgr.addColorStop(0.5,'#b9bcc9'); mgr.addColorStop(1,'#3a3d4a');
+  ctx.fillStyle=mgr; ctx.fillRect(mx-Rm,my-Rm,Rm*2,Rm*2);
+  ctx.restore();
+  ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.beginPath(); ctx.arc(mx,my,Rm,0,7); ctx.stroke();
+  ctx.fillStyle='#eaf0ff'; ctx.font='bold 12px sans-serif';
+  ctx.fillText('달', mx, my-Rm-6);
+
+  /* 속도 안내 */
+  ctx.textAlign='left';
+  const L1=`지구 자전 ${EARTH_SPIN_DEG_H}°/시 → 12시간에 180° (실제 값)`;
+  const L2=`달 공전 → 12시간에 ${moonW(state.mode).toFixed(0)}° (거리를 줄여 그려 움직이는 각도가 실제보다 크게 보임)`;
+  let fs=11;                                    // 좁은 화면에서는 글씨를 줄여 한 줄에 담는다
+  ctx.font=fs+'px sans-serif';
+  while(fs>8 && ctx.measureText(L2).width>w-30){ fs-=0.5; ctx.font=fs+'px sans-serif'; }
+  const w2=ctx.measureText(L2).width;
+  ctx.font='11px sans-serif';
+  const bw=Math.max(ctx.measureText(L1).width, w2)+12;
+  ctx.fillStyle='rgba(5,7,15,.68)'; ctx.fillRect(8,h-42,bw,34);
+  ctx.fillStyle='rgba(120,200,255,.95)'; ctx.fillText(L1, 14, h-27);
+  ctx.font=fs+'px sans-serif';
+  ctx.fillStyle='rgba(200,210,255,.9)';  ctx.fillText(L2, 14, h-12);
+}
+
+/* ===================== 달 표면(실제 보름달 모습) =====================
+   앞면의 '바다(어두운 현무암 평원)'와 밝은 충돌구·티코 광조를 그려 한 번만 만들어 두고 재사용. */
+let _moonTex=null;
+function moonTexture(){
+  if(_moonTex) return _moonTex;
+  const S=256, cv=document.createElement('canvas'); cv.width=cv.height=S;
+  const c=cv.getContext('2d'), R=S/2;
+  c.save(); c.beginPath(); c.arc(R,R,R,0,7); c.clip();
+  // 밝은 고지대 바탕 + 가장자리 어두워짐(주변감광)
+  const base=c.createRadialGradient(R*0.86,R*0.80,R*0.10,R,R,R);
+  base.addColorStop(0,'#fcf9f2'); base.addColorStop(0.55,'#eae4d8');
+  base.addColorStop(0.88,'#cec6b8'); base.addColorStop(1,'#a8a193');
+  c.fillStyle=base; c.fillRect(0,0,S,S);
+  // 달의 바다 — 실제 앞면 배치(좌상 비의바다·좌 폭풍의대양·중앙 고요의바다·우상 위난의바다 등)
+  [[-0.30,-0.36,0.30],[-0.58,-0.06,0.26],[-0.50,0.22,0.15],[0.04,-0.34,0.17],
+   [0.23,-0.13,0.20],[0.40,0.04,0.13],[0.26,0.18,0.10],[-0.22,0.30,0.15],
+   [0.50,-0.34,0.10],[-0.66,0.34,0.11],[-0.05,-0.09,0.10]].forEach(([x,y,rr])=>{
+    const px=R+x*R, py=R+y*R, pr=rr*R;
+    const g=c.createRadialGradient(px,py,pr*0.15,px,py,pr);
+    g.addColorStop(0,'rgba(103,99,95,.88)');
+    g.addColorStop(0.72,'rgba(118,113,107,.74)');
+    g.addColorStop(1,'rgba(130,125,118,0)');
+    c.fillStyle=g; c.beginPath(); c.arc(px,py,pr,0,7); c.fill();
+  });
+  // 티코 충돌구의 광조(남쪽에서 사방으로 뻗는 밝은 줄기)
+  const tx=R-0.14*R, ty=R+0.56*R;
+  for(let i=0;i<18;i++){
+    const ang=i*(Math.PI*2/18)+0.3, L=R*(0.45+((i*37)%10)/10*0.75);
+    const g=c.createLinearGradient(tx,ty,tx+Math.cos(ang)*L,ty+Math.sin(ang)*L);
+    g.addColorStop(0,'rgba(255,253,246,.55)'); g.addColorStop(1,'rgba(255,253,246,0)');
+    c.strokeStyle=g; c.lineWidth=R*0.035;
+    c.beginPath(); c.moveTo(tx,ty); c.lineTo(tx+Math.cos(ang)*L,ty+Math.sin(ang)*L); c.stroke();
+  }
+  // 밝은 충돌구 몇 개(티코·코페르니쿠스 등)
+  [[-0.14,0.56,0.048],[-0.20,-0.03,0.036],[0.30,0.45,0.030],
+   [-0.45,0.50,0.026],[0.55,0.20,0.024],[0.10,0.62,0.022]].forEach(([x,y,rr])=>{
+    const px=R+x*R, py=R+y*R, pr=rr*R*1.8;
+    const g=c.createRadialGradient(px,py,0,px,py,pr);
+    g.addColorStop(0,'rgba(255,252,244,.95)'); g.addColorStop(0.45,'rgba(242,236,224,.6)');
+    g.addColorStop(1,'rgba(242,236,224,0)');
+    c.fillStyle=g; c.beginPath(); c.arc(px,py,pr,0,7); c.fill();
+  });
+  c.restore();
+  _moonTex=cv; return cv;
+}
+function paintMoon(ctx,cx,cy,r){
+  ctx.drawImage(moonTexture(), cx-r, cy-r, r*2, r*2);
+  // 구형 음영(입체감) — 좌상단은 밝고 가장자리는 어둡게(주변감광)
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,7); ctx.clip();
+  const sh=ctx.createRadialGradient(cx-r*0.3,cy-r*0.3,r*0.15,cx,cy,r*1.05);
+  sh.addColorStop(0,'rgba(255,255,255,0.08)');
+  sh.addColorStop(0.55,'rgba(0,0,0,0)');
+  sh.addColorStop(1,'rgba(0,0,0,0.36)');
+  ctx.fillStyle=sh; ctx.fillRect(cx-r,cy-r,r*2,r*2);
+  ctx.restore();
+}
+
+/* ===================== 지구에서 본 모습 ===================== */
+function drawEarth(){
+  const {w,h}=fitDPR(earthCv,ectx);
+  const ctx=ectx;
+  ctx.clearRect(0,0,w,h);
+
+  if(state.mode==='solar') drawSolarView(ctx,w,h);
+  else drawLunarView(ctx,w,h);
+}
+
+/* 태양과 그것을 가리는 달 */
+function paintSolarPair(ctx,cx,cy,Rs,mx,my,Rm,cover){
+  const t=performance.now()*0.001;
+  // 평상시 태양 빛 번짐(Glow) — 원반보다 넓게 은은하게
+  if(cover<0.985){
+    const glow=ctx.createRadialGradient(cx,cy,Rs*0.5,cx,cy,Rs*2.6);
+    const gi=0.55*(1-cover);
+    glow.addColorStop(0,`rgba(255,238,180,${gi})`);
+    glow.addColorStop(0.5,`rgba(255,205,90,${gi*0.5})`);
+    glow.addColorStop(1,'rgba(255,190,60,0)');
+    ctx.fillStyle=glow; ctx.beginPath(); ctx.arc(cx,cy,Rs*2.6,0,7); ctx.fill();
+  }
+  // 개기 근처: 코로나가 일렁이는 다중 레이어
+  if(cover>0.9){
+    const a=(cover-0.9)/0.1;
+    for(let k=0;k<3;k++){
+      const rad=Rs*(1.5+k*0.55) * (1+0.04*Math.sin(t*(1.3+k*0.5)+k));
+      const cor=ctx.createRadialGradient(cx,cy,Rs*0.92,cx,cy,rad);
+      const ca=a*(0.34-k*0.09)*(0.85+0.15*Math.sin(t*(1.6+k)+k*2));
+      cor.addColorStop(0,`rgba(255,244,210,${Math.max(0,ca)})`);
+      cor.addColorStop(1,'rgba(255,240,200,0)');
+      ctx.fillStyle=cor; ctx.beginPath(); ctx.arc(cx,cy,rad,0,7); ctx.fill();
+    }
+    // 방사형 코로나 줄기
+    ctx.save(); ctx.translate(cx,cy); ctx.rotate(t*0.05);
+    for(let i=0;i<24;i++){
+      const ang=i*(Math.PI*2/24), L=Rs*(1.35+((i*53)%7)/7*0.7);
+      const g=ctx.createLinearGradient(Rs*0.95*Math.cos(ang),Rs*0.95*Math.sin(ang),L*Math.cos(ang),L*Math.sin(ang));
+      g.addColorStop(0,`rgba(255,246,214,${a*0.4})`); g.addColorStop(1,'rgba(255,246,214,0)');
+      ctx.strokeStyle=g; ctx.lineWidth=Rs*0.05;
+      ctx.beginPath(); ctx.moveTo(Rs*0.95*Math.cos(ang),Rs*0.95*Math.sin(ang)); ctx.lineTo(L*Math.cos(ang),L*Math.sin(ang)); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  // 태양 원반 — 밝은 중심 코어
+  const sg=ctx.createRadialGradient(cx-Rs*0.12,cy-Rs*0.12,Rs*0.1,cx,cy,Rs);
+  sg.addColorStop(0,'#fffdf3'); sg.addColorStop(0.45,'#ffe58a');
+  sg.addColorStop(0.78,'#ffcf3f'); sg.addColorStop(1,'#ff9d1f');
+  ctx.fillStyle=sg; ctx.beginPath(); ctx.arc(cx,cy,Rs,0,7); ctx.fill();
+  // 달(어두운 원)이 태양을 가림 — 살짝 대기 산란 테두리
+  ctx.fillStyle='#0b0f1c'; ctx.beginPath(); ctx.arc(mx,my,Rm,0,7); ctx.fill();
+}
+
+/* HUD 텍스트 뒤 어두운 반투명 배경판 — 밝은 하늘에서도 글자가 잘 보이도록 */
+function hudPlate(ctx,x,y,w,h){
+  ctx.save();
+  ctx.fillStyle='rgba(6,10,22,0.55)';
+  ctx.beginPath();
+  if(ctx.roundRect) ctx.roundRect(x,y,w,h,8); else ctx.rect(x,y,w,h);
+  ctx.fill();
+  ctx.restore();
+}
+
+/* ---- 일식: 태양을 달이 가림 (낮, 남쪽 하늘의 천구) ---- */
+function drawSolarView(ctx,w,h){
+  // 실제 비율: 태양과 달의 겉보기 크기는 거의 같다(약 0.5°). 그래서 개기일식이 가능.
+  // 원반이 크면 '식이 진행되는 상대 이동'이 일주운동보다 커져서 달이 하늘에서 거꾸로 가는 것처럼
+  // 보인다. 달이 태양보다 느리게(약 30%) 뒤처지도록 원반 크기를 정했다.
+  const Rapp=Math.min(w,h)*0.042;     // 겉보기 반지름(달·태양 공통 기준)
+  const Rs=Rapp;                      // 태양 반지름
+  const Rm=Rapp*MOON_SUN_RATIO;       // 달 반지름(살짝 커서 완전히 가릴 수 있음)
+  const maxOff=Rs+Rm;
+  // 첫 접촉~마지막 접촉 = 2시간 반(SOLAR_HOURS) = 일주호(자전 12시간)의 약 21%.
+  // 그동안 자전이 훨씬 빨라서 태양·달은 하늘의 1/5쯤을 함께 서쪽으로 이동한다.
+  const u=eclipseU();
+  const off=-maxOff*drawU(u);         // u=-1 첫 접촉 · 0 식 최대 · +1 마지막 접촉
+
+  // 태양·달 모두 같은 일주운동 호(지구 자전에 의한 겉보기 경로) 위에 놓는다.
+  // 달은 공전 때문에 태양보다 off(픽셀)만큼 앞선(서쪽) 호 위치에 있어, 남중에서 태양과 겹친다.
+  const geom=domeGeom(w,h);
+  const uS=skyParam(state.t,geom);
+  const duMoon=off/arcSpeed(uS,geom);            // 픽셀 간격 → 호 매개변수 간격
+  const sunP=arcPoint(uS,geom), moonP=arcPoint(uS+duMoon,geom);
+  const cx=sunP.x, cy=sunP.y;                    // 태양(경로 위)
+  const mx=moonP.x, my=moonP.y;                  // 달(같은 경로 위, 앞선 위치)
+  const cover=coverAt('solar',u);     // 우주에서 본 모습과 같은 식을 사용 → 진행이 항상 일치
+  const dark=Math.min(1,cover);
+
+  // 천구(하늘 반구) + 지표면
+  const dome=drawDome(ctx,w,h,{night:false,dark});
+
+  // 개기(본그림자 중심) 근처: 사방(360°) 지평선이 붉게 물드는 노을 효과
+  // — 개기일식 때 관측자를 둘러싼 모든 방향의 지평선이 저녁놀처럼 붉어진다.
+  if(cover>0.965){
+    const glow=Math.min(1,(cover-0.965)/0.035), yH=geom.yH;
+    ctx.save();
+    // 지평선 위로 퍼지는 넓은 붉은 띠
+    let gg=ctx.createLinearGradient(0,yH-h*0.20,0,yH);
+    gg.addColorStop(0,'rgba(255,120,60,0)');
+    gg.addColorStop(1,`rgba(255,110,55,${0.42*glow})`);
+    ctx.fillStyle=gg; ctx.fillRect(0,yH-h*0.20,w,h*0.20);
+    // 지평선 바로 위 진한 저녁놀
+    gg=ctx.createLinearGradient(0,yH-h*0.06,0,yH);
+    gg.addColorStop(0,'rgba(255,80,45,0)');
+    gg.addColorStop(1,`rgba(255,70,40,${0.6*glow})`);
+    ctx.fillStyle=gg; ctx.fillRect(0,yH-h*0.06,w,h*0.06);
+    ctx.restore();
+  }
+
+  // 태양 + 달
+  paintSolarPair(ctx,cx,cy,Rs,mx,my,Rm,cover);
+
+  // 라벨
+  ctx.fillStyle='rgba(255,255,255,.9)'; ctx.font='12px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('태양', cx, cy-Rs-8);
+  ctx.fillText('달', mx, my+Rm+15);   // 달 라벨 항상 표시
+
+  // 진행 정보 (왼쪽 위) — 원래대로
+  const phase = cover<0.001?'식 없음(태양 그대로)':cover>0.98?'개기일식(태양이 완전히 가려짐)':'부분일식 진행 중';
+  ctx.textAlign='left';
+  ctx.fillStyle='#eaf0ff'; ctx.font='bold 14px sans-serif';
+  ctx.fillText(`가림 정도: ${(cover*100).toFixed(0)}%`, 14, 24);
+  ctx.fillStyle='#ffd23f'; ctx.fillText(phase, 14, 44);
+  ctx.fillStyle='#bfe6ff'; ctx.font='11px sans-serif';
+  ctx.fillText(`🕒 ${clockText()} · 자전 ${EARTH_SPIN_DEG_H}°/시 · 식 지속 약 ${(SOLAR_SPAN*ARC_HOURS).toFixed(1)}시간`, 14, 63);
+  // 일주운동 상태(오른쪽 위)
+  const t1='☀ '+diurnalLabel(state.t), t2='태양 ≈ 달 (겉보기 크기 거의 같음)';
+  ctx.textAlign='right';
+  ctx.font='12px sans-serif'; const rw1=ctx.measureText(t1).width;
+  ctx.font='11px sans-serif'; const rw2=ctx.measureText(t2).width;
+  const rmax=Math.max(rw1,rw2);
+  hudPlate(ctx, w-14-rmax-8, 9, rmax+16, 41);
+  ctx.fillStyle='#dbeeff'; ctx.font='12px sans-serif';
+  ctx.fillText(t1, w-14, 24);
+  ctx.fillStyle='#eaf3ff'; ctx.font='bold 11px sans-serif';
+  ctx.fillText(t2, w-14, 42);
+
+  updateInfo('solar',cover);
+}
+
+/* 하늘에 드리운 지구의 그림자 (하늘·확대창에서 함께 사용) */
+function paintEarthShadow(ctx,sx,sy,Ru,Rp){
+  ctx.fillStyle='rgba(70,60,70,0.28)';                 // 반그림자(半影)
+  ctx.beginPath(); ctx.arc(sx,sy,Rp,0,7); ctx.fill();
+  const ug=ctx.createRadialGradient(sx,sy,Ru*0.55,sx,sy,Ru);   // 본그림자(本影)
+  ug.addColorStop(0,'rgba(34,32,42,0.72)'); ug.addColorStop(1,'rgba(30,28,38,0.5)');
+  ctx.fillStyle=ug;
+  ctx.beginPath(); ctx.arc(sx,sy,Ru,0,7); ctx.fill();
+}
+
+/* 그림자에 가려진 달 (하늘·확대창에서 함께 사용) */
+function paintEclipsedMoon(ctx,mx,my,Rm,sx,sy,Ru,Rp,cover){
+  // 개기월식: 붉은 달 둘레로 드라마틱한 붉은 발광(맥동)
+  if(cover>0.985){
+    const t=performance.now()*0.001, pulse=0.82+0.18*Math.sin(t*1.4);
+    const gl=ctx.createRadialGradient(mx,my,Rm*0.7,mx,my,Rm*2.5);
+    gl.addColorStop(0,`rgba(205,72,42,${0.52*pulse})`);
+    gl.addColorStop(0.5,`rgba(150,40,25,${0.28*pulse})`);
+    gl.addColorStop(1,'rgba(120,30,20,0)');
+    ctx.fillStyle=gl; ctx.beginPath(); ctx.arc(mx,my,Rm*2.5,0,7); ctx.fill();
+  }
+  ctx.save();
+  ctx.beginPath(); ctx.arc(mx,my,Rm,0,7); ctx.clip();
+  paintMoon(ctx,mx,my,Rm);          // 실제 보름달 사진처럼(바다·충돌구)
+  ctx.globalCompositeOperation='source-atop';
+  // 반그림자에 들어간 부분 → 눈에 띄게 어두워진다.
+  // 본그림자 경계에 가까울수록 진해지고, 반그림자 바깥 가장자리에서는 옅다.
+  const pdark=ctx.createRadialGradient(sx,sy,Ru*0.5,sx,sy,Rp);
+  pdark.addColorStop(0,'rgba(26,22,26,0.62)');
+  pdark.addColorStop(Ru/Rp,'rgba(26,22,26,0.54)');  // 본그림자 경계
+  pdark.addColorStop(1,'rgba(26,22,26,0.10)');      // 반그림자 바깥 가장자리
+  ctx.fillStyle=pdark;
+  ctx.beginPath(); ctx.arc(sx,sy,Rp,0,7); ctx.fill();
+  // 본그림자에 들어간 부분
+  const ud=ctx.createRadialGradient(sx,sy,0,sx,sy,Ru);
+  if(cover>0.985){   // 개기월식 : 대기를 통과한 붉은 빛(중심은 더 어둡고 가장자리는 구리빛)
+    ud.addColorStop(0,'rgba(72,17,11,0.9)');
+    ud.addColorStop(0.5,'rgba(150,44,24,0.86)');
+    ud.addColorStop(0.82,'rgba(202,92,50,0.82)');
+    ud.addColorStop(1,'rgba(230,132,82,0.8)');
+  } else {           // 부분월식 : 붉지 않고 거의 검게 보인다(사진처럼)
+    ud.addColorStop(0,'rgba(11,9,11,0.95)');
+    ud.addColorStop(0.8,'rgba(19,16,16,0.94)');
+    ud.addColorStop(1,'rgba(33,24,20,0.92)');
+  }
+  ctx.fillStyle=ud;
+  ctx.beginPath(); ctx.arc(sx,sy,Ru,0,7); ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle='rgba(255,255,255,.45)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.arc(mx,my,Rm,0,7); ctx.stroke();
+}
+
+/* ---- 월식: 지구 그림자가 달을 가림 (밤, 남쪽 하늘의 천구) ---- */
+function drawLunarView(ctx,w,h){
+  // 실제 비율(달 위치 기준): 달 : 본그림자 : 반그림자 = 1 : 약 2.6 : 약 4.6
+  // 원반이 크면 그림자의 상대 이동이 일주운동보다 커져 하늘에서 거꾸로 흐르는 것처럼 보인다.
+  // → 그림자가 달보다 느리게(약 30%) 따라오도록 크기를 정했다.
+  const Rm=Math.min(w,h)*0.040;        // 달 반지름(그림자가 훨씬 커서 달은 작게)
+  const Ru=Rm*UMBRA_MOON_RATIO;        // 지구 본그림자(본影) 반지름
+  const Rp=Rm*PENUM_MOON_RATIO;        // 지구 반그림자(半影) 반지름
+  const maxOff=Ru+Rm;
+  // 첫 접촉~마지막 접촉 = 5시간(LUNAR_HOURS) = 일주호(자전 12시간)의 약 42%.
+  // 지구 그림자가 달보다 훨씬 커서 일식(2시간 반)보다 두 배쯤 오래 이어진다.
+  const u=eclipseU();
+  const off=-maxOff*drawU(u);          // u=-1 첫 접촉 · 0 식 최대 · +1 마지막 접촉
+  const cover=coverAt('lunar',u);      // 우주에서 본 모습과 같은 식을 사용 → 진행이 항상 일치
+  const pen=inPenumbra(u);             // 반그림자에 걸쳐 있는가(반영월식)
+
+  // 천구(밤하늘) + 지표면
+  const dome=drawDome(ctx,w,h,{night:true,dark:0});
+  // 달이 일주운동 경로(호) 위에서 동→남중→서로 뜨고 진다 (달을 경로에 고정)
+  const uS=skyParam(state.t,dome);
+  const pt=arcPoint(uS,dome), T=arcTangent(uS,dome);
+  const mx=pt.x, my=pt.y;               // 달 (일주운동 경로 위)
+  // 지구의 그림자(반영점)는 달에 대해 상대적으로 이동하며, 남중에서 달과 겹친다
+  const sx=mx-off*T.x, sy=my-off*T.y;   // 그림자 중심
+
+  paintEarthShadow(ctx,sx,sy,Ru,Rp);                 // 하늘에 드리운 지구 그림자
+  paintEclipsedMoon(ctx,mx,my,Rm,sx,sy,Ru,Rp,cover); // 그림자에 가려진 달
+
+  // 그림자 경계선 + 라벨
+  ctx.setLineDash([5,5]);
+  ctx.strokeStyle='rgba(150,152,168,.6)'; ctx.beginPath(); ctx.arc(sx,sy,Ru,0,7); ctx.stroke();
+  ctx.strokeStyle='rgba(150,140,150,.45)'; ctx.beginPath(); ctx.arc(sx,sy,Rp,0,7); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle='rgba(185,187,200,.95)'; ctx.font='11px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('본그림자', sx, sy-Ru-6);
+  ctx.fillStyle='rgba(170,160,175,.85)';
+  ctx.fillText('반그림자', sx, sy-Rp-5);
+
+  ctx.fillStyle='rgba(255,255,255,.95)'; ctx.font='12px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('달', mx, my-Rm-8);
+
+  // 진행 정보
+  const phase = cover>0.98 ? '개기월식(붉은 달)'
+              : cover>0.001 ? '부분월식 진행 중'
+              : pen ? '반영월식(반그림자 — 달이 조금 어두워짐)'
+              : '식 없음(보름달)';
+  ctx.textAlign='left';
+  ctx.fillStyle='#eaf0ff'; ctx.font='bold 14px sans-serif';
+  ctx.fillText(`가림 정도: ${(cover*100).toFixed(0)}%`, 14, 24);
+  ctx.fillStyle = cover<0.001&&pen ? '#c8b8d8' : '#ff9b86';
+  ctx.fillText(phase, 14, 44);
+  ctx.fillStyle='#cbd8ff'; ctx.font='11px sans-serif';
+  ctx.fillText(`🕒 ${clockText()} · 자전 ${EARTH_SPIN_DEG_H}°/시 · 식 지속 약 ${(LUNAR_SPAN*ARC_HOURS).toFixed(1)}시간`, 14, 63);
+  ctx.fillStyle='rgba(200,150,150,.9)';
+  ctx.fillText('달이 지구의 그림자 속으로 들어감', 14, 81);
+  ctx.fillText('☀ 태양은 지평선 아래(정반대편)에 있음', 14, 99);
+  // 일주운동 상태(오른쪽 위)
+  ctx.textAlign='right'; ctx.fillStyle='#cbd8ff'; ctx.font='12px sans-serif';
+  ctx.fillText('🌕 '+diurnalLabel(state.t), w-14, 24);
+  ctx.fillStyle='#9fb0d8'; ctx.font='11px sans-serif';
+  ctx.fillText('지구 본그림자 ≈ 달의 2.5배', w-14, 42);
+
+  updateInfo('lunar',cover,pen);
+}
+
+/* 색 보간 */
+function mix(c1,c2,t){
+  const a=hx(c1), b=hx(c2);
+  const r=Math.round(a[0]+(b[0]-a[0])*t);
+  const g=Math.round(a[1]+(b[1]-a[1])*t);
+  const bl=Math.round(a[2]+(b[2]-a[2])*t);
+  return `rgb(${r},${g},${bl})`;
+}
+function hx(c){ c=c.replace('#',''); return [parseInt(c.slice(0,2),16),parseInt(c.slice(2,4),16),parseInt(c.slice(4,6),16)]; }
+
+/* ===================== 설명 패널 업데이트 ===================== */
+/* 모드가 바뀔 때 한 번만 실행 — 설명 문구의 '고정된 부분'을 써 넣는다.
+   가려진 정도(%)만 <b id="coverPct"> 안에서 매 프레임 바뀐다. */
+function setInfoStatic(mode){
+  const d=document.getElementById('descLine');
+  if(mode==='solar'){
+    d.innerHTML=`<b>달이 태양을 가리는</b> 현상이에요. 태양–달–지구가 일직선(달이 <b>삭</b>)일 때 일어나고, 낮인데도 하늘이 어두워집니다.
+      지금 태양이 <b id="coverPct">0%</b> 가려졌어요.
+      <span class="warn">⚠️ 실제 일식을 관측할 때는 반드시 태양 관측 안경이나 필터를 써야 합니다.</span>`;
+  }else{
+    d.innerHTML=`<b>달이 지구의 그림자에 가려지는</b> 현상이에요. 태양–지구–달이 일직선(달이 <b>망</b>)일 때 일어나고,
+      개기월식 때 달은 <b>붉게</b> 보여요. 지금 달이 <b id="coverPct">0%</b> 가려졌어요.`;
+  }
+  _pct=-1; _badge=''; _stage=-1;   // 다음 갱신 때 statusLine·아이콘을 강제로 다시 그림
+}
+
+/* 매 프레임 호출 — 실제로 값이 바뀐 부분만 DOM에 반영한다(불필요한 innerHTML/쿼리 제거) */
+let _pct=-1, _badge='', _stage=-1;
+function updateInfo(mode,cover,pen){
+  const pct=Math.round(cover*100);
+  if(pct!==_pct){
+    const el=document.getElementById('coverPct');
+    if(el) el.textContent=pct+'%';
+    _pct=pct;
+  }
+  const badge = mode==='solar'
+    ? (cover>0.98?'<span class="badge solar">개기일식</span>':
+       cover>0.001?'<span class="badge solar">부분일식</span>':
+       '<span class="badge none">식 없음</span>')
+    : (cover>0.98?'<span class="badge lunar">개기월식</span>':
+       cover>0.001?'<span class="badge lunar">부분월식</span>':
+       pen?'<span class="badge none">반영월식</span>':
+       '<span class="badge none">식 없음</span>');
+  if(badge!==_badge){
+    document.getElementById('statusLine').innerHTML=
+      (mode==='solar'?'☀️ 일식 (日蝕) ':'🌕 월식 (月蝕) ')+badge;
+    _badge=badge;
+  }
+  updateStages(cover);
+}
+
+/* 식 진행 5단계 표시 (t<0.5=식 최대 전, t>=0.5=식 최대 후) */
+function updateStages(cover){
+  let stage;
+  if(cover<0.005)       stage = (state.t<0.5) ? 1 : 5;   // 식 전 / 식 종료
+  else if(cover>=0.985) stage = 3;                        // 개기(최대)
+  else                  stage = (state.t<0.5) ? 2 : 4;    // 부분식(커짐/줄어듦)
+  if(stage===_stage) return;                             // 단계가 바뀔 때만 DOM 갱신
+  _stage=stage;
+  document.querySelectorAll('#stages .stage').forEach(el=>{
+    el.classList.toggle('active', +el.dataset.stage===stage);
+  });
+}
+
+/* 5단계 아이콘: 각 단계의 식 모양을 작은 그림으로 그린다(모드에 따라 태양/달) */
+function drawStageIcons(mode){
+  // 단계 명칭도 대상에 맞게(일식/월식) 바꾼다
+  const partial = mode==='solar' ? '부분일식' : '부분월식';
+  const totalNm = mode==='solar' ? '개기일식' : '개기월식';
+  const labels = ['식 시작 전', partial, totalNm, partial, '식 종료'];
+  document.querySelectorAll('#stages .stage').forEach(st=>{
+    st.querySelector('.slabel').textContent = labels[+st.dataset.stage-1];
+  });
+  document.querySelectorAll('#stages .sicon').forEach(cv=>{
+    const stage=+cv.parentElement.dataset.stage;
+    const ctx=cv.getContext('2d'); const S=cv.width;
+    const cx=S/2, cy=S/2, r=S*0.30;
+    ctx.clearRect(0,0,S,S);
+    if(mode==='solar'){
+      // 태양을 달(어두운 원)이 가림
+      if(stage===3){ // 개기: 코로나 + 검은 원
+        const cor=ctx.createRadialGradient(cx,cy,r*0.95,cx,cy,r*1.5);
+        cor.addColorStop(0,'rgba(255,240,200,.9)'); cor.addColorStop(1,'rgba(255,240,200,0)');
+        ctx.fillStyle=cor; ctx.beginPath(); ctx.arc(cx,cy,r*1.5,0,7); ctx.fill();
+        ctx.fillStyle='#0c1020'; ctx.beginPath(); ctx.arc(cx,cy,r,0,7); ctx.fill();
+      } else {
+        const g=ctx.createRadialGradient(cx,cy,r*0.2,cx,cy,r);
+        g.addColorStop(0,'#fff6d5'); g.addColorStop(0.7,'#ffd23f'); g.addColorStop(1,'#ff9d1f');
+        ctx.fillStyle=g; ctx.beginPath(); ctx.arc(cx,cy,r,0,7); ctx.fill();
+        if(stage===2||stage===4){ // 부분식: 달이 한쪽을 가림 (실제처럼 서→동, 2단계=오른쪽부터)
+          const off = stage===2 ? r*0.95 : -r*0.95;
+          ctx.fillStyle='#0c1020'; ctx.beginPath(); ctx.arc(cx+off,cy,r*1.02,0,7); ctx.fill();
+        }
+      }
+    } else {
+      // 실제 보름달 모습 위에 지구 그림자를 덮는다
+      ctx.save(); ctx.beginPath(); ctx.arc(cx,cy,r,0,7); ctx.clip();
+      paintMoon(ctx,cx,cy,r);
+      if(stage===3){ // 개기월식: 전체가 붉은 달
+        const rg=ctx.createRadialGradient(cx,cy,0,cx,cy,r);
+        rg.addColorStop(0,'rgba(94,28,18,.88)'); rg.addColorStop(0.75,'rgba(152,50,28,.84)');
+        rg.addColorStop(1,'rgba(198,96,56,.78)');
+        ctx.fillStyle=rg; ctx.fillRect(cx-r,cy-r,r*2,r*2);
+      } else if(stage===2||stage===4){ // 부분월식: 가려진 쪽은 붉지 않고 어둡게(실제 모습)
+        const shOff = stage===2 ? -r*1.9 : r*1.9;
+        const sg=ctx.createRadialGradient(cx+shOff,cy,r*0.5,cx+shOff,cy,r*2);
+        sg.addColorStop(0,'rgba(11,9,11,.95)'); sg.addColorStop(1,'rgba(33,24,20,.92)');
+        ctx.fillStyle=sg; ctx.beginPath(); ctx.arc(cx+shOff,cy,r*2,0,7); ctx.fill();
+      }
+      ctx.restore();
+      ctx.strokeStyle='rgba(255,255,255,.35)'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.arc(cx,cy,r,0,7); ctx.stroke();
+    }
+  });
+}
+
+/* ===================== 애니메이션 루프 ===================== */
+function render(){
+  drawSpace();
+  drawEarth();
+}
+let last=0, dirty=true, seeking=false;
+function loop(ts){
+  if(state.playing && !seeking){
+    const dt=(ts-last)||16; last=ts;
+    // t: 0(동, 뜸) → 0.5(남중, 식 최대) → 1(서, 짐). t 전체 = 지구 자전 180° = 12시간.
+    // 시간 흐름은 t에 정비례(일정한 자전 속도). 기본 속도(4)에서 시뮬레이션 1시간 = 6초.
+    state.t += dt*state.speed/(4*SEC_PER_SIM_HOUR*ARC_HOURS*1000);
+    if(state.t>1) state.t-=1;
+    seek.value=state.t;        // 슬라이더를 재생 위치에 맞춤
+    render();
+  } else if(dirty){
+    // 정지 중(또는 슬라이더 조작 중)에는 변화가 있을 때만 다시 그림
+    last=ts; render(); dirty=false;
+  } else { last=ts; }
+  requestAnimationFrame(loop);
+}
+
+/* ===================== 이벤트 ===================== */
+const btnSolar=document.getElementById('btnSolar');
+const btnLunar=document.getElementById('btnLunar');
+const btnPlay=document.getElementById('btnPlay');
+const earthTag=document.getElementById('earthTag');
+const seek=document.getElementById('seek');
+
+// 일식/월식을 누르면 그 대상으로 바꾸고 처음(동쪽에서 뜸)부터 바로 자동 재생
+function selectAndPlay(m){
+  state.mode=m;
+  btnSolar.classList.toggle('active',m==='solar');
+  btnLunar.classList.toggle('active',m==='lunar');
+  earthTag.textContent = m==='solar'?'일식 진행':'월식 진행';
+  drawStageIcons(m);         // 5단계 아이콘을 현재 대상(태양/달)에 맞게 다시 그림 (모드 변경 시 1회)
+  setInfoStatic(m);          // 설명 문구의 고정 부분도 이때 1회만 갱신
+  // 동쪽 지평선에서 떠오르는 순간부터 시작한다.
+  state.t = 0;
+  seek.value = 0;
+  state.playing=true;
+  btnPlay.textContent='⏸ 정지'; btnPlay.classList.add('active');
+  dirty=true;
+}
+btnSolar.onclick=()=>selectAndPlay('solar');
+btnLunar.onclick=()=>selectAndPlay('lunar');
+
+btnPlay.onclick=()=>{
+  state.playing=!state.playing;
+  btnPlay.textContent=state.playing?'⏸ 정지':'▶ 재생';
+  btnPlay.classList.toggle('active',state.playing);
+  dirty=true;
+};
+document.getElementById('speed').oninput=e=>{ state.speed=+e.target.value; };
+
+/* 타임라인(시간 이동) 슬라이더 — 재생 중 드래그하면 바로 그 위치로 이동하고,
+   드래그하는 동안에는 자동 진행을 멈췄다가 손을 떼면 이어서 재생된다. */
+seek.addEventListener('input', e=>{ seeking=true; state.t=+e.target.value; dirty=true; });
+seek.addEventListener('change', ()=>{ seeking=false; });   // 손을 뗀 순간부터 다시 자동 진행
+
+/* 특정 시점으로 즉시 이동 (state.t·슬라이더 갱신 후 다시 그림) */
+function seekTo(t){ state.t=clamp(t,0,1); seek.value=state.t; dirty=true; }
+
+/* 5단계(식 시작 전·부분·개기·부분·식 종료) 클릭 → 해당 시점으로 이동.
+   각 단계의 대표 t 값은 현재 모드의 식 지속시간(SPAN)으로부터 계산한다. */
+function stageT(stage, mode){
+  const span = mode==='solar' ? SOLAR_SPAN : LUNAR_SPAN;
+  switch(stage){
+    case 1: return clamp(0.5 - span/2 - 0.03, 0, 1);  // 식 시작 전
+    case 2: return 0.5 - span/4;                        // 부분식(커지는 중)
+    case 3: return 0.5;                                 // 개기(식 최대)
+    case 4: return 0.5 + span/4;                        // 부분식(줄어드는 중)
+    case 5: return clamp(0.5 + span/2 + 0.03, 0, 1);   // 식 종료
+  }
+  return 0.5;
+}
+document.querySelectorAll('#stages .stage').forEach(el=>{
+  el.addEventListener('click', ()=> seekTo(stageT(+el.dataset.stage, state.mode)) );
+});
+
+/* 키보드 조작 — Space: 재생/정지, ←/→: 타임라인 ±0.01
+   입력 요소나 버튼에 포커스가 있을 땐 각 요소의 기본 동작을 방해하지 않는다. */
+window.addEventListener('keydown', e=>{
+  const el=e.target, tag=(el.tagName||'').toLowerCase();
+  if(el.isContentEditable || tag==='input' || tag==='textarea' || tag==='select' || tag==='button') return;
+  if(e.code==='Space' || e.key===' '){ e.preventDefault(); btnPlay.onclick(); }
+  else if(e.key==='ArrowLeft'){  e.preventDefault(); seekTo(state.t-0.01); }
+  else if(e.key==='ArrowRight'){ e.preventDefault(); seekTo(state.t+0.01); }
+});
+
+/* 창/레이아웃 크기 변화 대응 — Debounce 로 과도한 재렌더를 막고 비율 왜곡을 방지 */
+let _resizeTimer=null;
+function onResize(){ clearTimeout(_resizeTimer); _resizeTimer=setTimeout(()=>{ dirty=true; render(); }, 120); }
+if(window.ResizeObserver){
+  const ro=new ResizeObserver(onResize);
+  ro.observe(spaceCv); ro.observe(earthCv);   // 캔버스 표시 크기가 바뀔 때마다 감지
+} else {
+  window.addEventListener('resize', onResize);
+}
+
+btnPlay.classList.add('active');   // 시작 시 재생 중
+drawStageIcons(state.mode);        // 시작 시(일식) 5단계 아이콘 그림 (1회)
+setInfoStatic(state.mode);         // 설명 문구 고정 부분 초기화 (1회)
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>빛의 합성 시뮬레이션 — 빛의 삼원색</title>
+<style>
+  /* ══ 시리즈 공통 디자인 토큰 ══ */
+  :root{
+    --bg-deep:#05070f;
+    --bg:#0f172a;
+    --panel:rgba(15, 20, 35, 0.92);
+    --panel-border:rgba(90, 130, 220, 0.25);
+    --card-bg:rgba(30, 40, 65, 0.55);
+    --text-main:#e8edf7;
+    --text-dim:#9aa7c2;
+    --accent:#38bdf8;
+    --red:#f43f5e;
+    --green:#34d399;
+    --blue:#60a5fa;
+    --radius:14px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    background:radial-gradient(ellipse at 50% -20%, #1b2a4d 0%, var(--bg) 55%, var(--bg-deep) 100%);
+    color:var(--text-main);
+    font-family:'Pretendard','Noto Sans KR','Malgun Gothic',-apple-system,sans-serif;
+    min-height:100vh;
+    line-height:1.55;
+  }
+  .wrap{max-width:1280px;margin:0 auto;padding:18px 20px 40px}
+
+  /* ── 헤더 ─────────────────────────────── */
+  header{
+    display:flex;align-items:center;gap:12px;
+    padding:4px 2px 16px;
+  }
+  header .logo{
+    width:38px;height:38px;border-radius:10px;flex-shrink:0;
+    background:radial-gradient(circle at 35% 35%, #7dd3fc, #0369a1);
+    display:flex;align-items:center;justify-content:center;
+    font-size:20px;box-shadow:0 0 18px rgba(56,189,248,0.45);
+  }
+  header h1{font-size:17px;font-weight:700;letter-spacing:-0.02em}
+  header .sub{font-size:12px;color:var(--text-dim);margin-top:2px}
+
+  /* ── 레이아웃 ──────────────────────────── */
+  main{
+    display:grid;grid-template-columns:minmax(0,1fr) 340px;
+    gap:14px;align-items:start;
+  }
+  /* ── 시뮬레이션 무대 ───────────────────── */
+  .stage-wrap{position:sticky;top:14px;min-width:0}
+  .stage{
+    position:relative;width:100%;aspect-ratio:4/3;
+    border-radius:var(--radius);overflow:hidden;
+    border:1px solid var(--panel-border);
+    background:#04050a;
+    box-shadow:0 8px 30px rgba(0,0,0,0.5);
+    touch-action:none;
+  }
+  canvas{
+    display:block;width:100%;height:100%;
+    touch-action:none;cursor:grab;
+    -webkit-user-select:none;user-select:none;
+    -webkit-tap-highlight-color:transparent;
+  }
+  canvas.dragging{cursor:grabbing}
+
+  /* ★ 시뮬레이션 내부 상단 힌트 ★ */
+  .stage-overlay-hint{
+    position:absolute;top:12px;left:12px;
+    display:flex;flex-direction:column;gap:6px;
+    pointer-events:none;z-index:5;
+  }
+  .stage-overlay-hint span{
+    display:inline-flex;align-items:center;gap:6px;
+    background:rgba(8, 12, 24, 0.75);
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+    border:1px solid var(--panel-border);
+    color:var(--text-main);
+    font-size:12px;font-weight:500;
+    padding:6px 12px;border-radius:20px;
+    box-shadow:0 4px 12px rgba(0,0,0,0.3);
+  }
+
+  /* ★ 무대 내부 우측 상단: 실시간 색상 분석 위젯 ★ */
+  .stage-overlay-readout{
+    position:absolute;top:12px;right:12px;
+    background:rgba(8, 12, 24, 0.82);
+    backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+    border:1px solid var(--panel-border);
+    border-radius:12px;
+    padding:10px 12px;
+    display:flex;align-items:center;gap:10px;
+    z-index:5;
+    box-shadow:0 4px 16px rgba(0,0,0,0.4);
+    pointer-events:none;
+  }
+  .stage-swatch{
+    width:34px;height:34px;border-radius:8px;
+    border:1px solid rgba(255,255,255,0.25);
+    box-shadow:0 0 12px var(--glow,transparent);
+    flex-shrink:0;
+    transition:background .1s;
+  }
+  .stage-read-info{display:flex;flex-direction:column}
+  .stage-read-role{font-size:10.5px;color:var(--text-dim);font-weight:500}
+  .stage-read-name{font-size:13.5px;font-weight:800;color:var(--text-main);line-height:1.2}
+  .stage-read-code{font-size:11px;color:var(--accent);font-variant-numeric:tabular-nums;margin-top:1px}
+
+  .caption{
+    position:absolute;left:10px;right:10px;bottom:10px;
+    background:rgba(8, 12, 24, 0.85);
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+    border:1px solid var(--panel-border);
+    border-radius:12px;padding:9px 14px;
+    font-size:13px;line-height:1.6;color:#cfe0f7;
+    box-shadow:0 6px 24px rgba(0,0,0,0.4);
+    transition:opacity .25s;z-index:5;
+  }
+  .caption b{color:#7dd3fc}
+  .caption.hidden{opacity:0;pointer-events:none}
+
+  /* ── 우측 사이드바 ─────────────────────── */
+  .panel{display:flex;flex-direction:column;gap:12px;min-width:0}
+  .card{
+    background:var(--card-bg);
+    border:1px solid var(--panel-border);
+    border-radius:var(--radius);
+    padding:13px 14px;
+  }
+  .card h2{
+    font-size:12.5px;font-weight:700;letter-spacing:-0.01em;
+    display:flex;align-items:center;gap:7px;margin-bottom:10px;
+    color:var(--text-dim);
+  }
+  .card h2 .dot{
+    width:8px;height:8px;border-radius:50%;flex-shrink:0;
+    background:var(--accent);box-shadow:0 0 8px var(--accent);
+  }
+
+  /* 공통 버튼 */
+  .tbtn{
+    display:inline-flex;align-items:center;justify-content:center;gap:5px;
+    font-size:12px;font-weight:700;font-family:inherit;
+    color:var(--text-dim);
+    background:rgba(8, 12, 24, 0.5);
+    border:1px solid var(--panel-border);
+    border-radius:20px;
+    padding:7px 12px;cursor:pointer;
+    transition:all .15s;user-select:none;-webkit-user-select:none;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .tbtn:hover{color:var(--text-main);border-color:var(--accent)}
+  .tbtn.on{
+    color:#0c1428;
+    background:linear-gradient(135deg, #7dd3fc, #38bdf8);
+    border-color:#7dd3fc;
+    box-shadow:0 0 14px rgba(56,189,248,0.45);
+  }
+
+  /* 모드 전환 */
+  .mode-switch{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .mode-switch .tbtn{border-radius:12px;padding:10px 8px;font-size:13px}
+
+  /* 조명 슬라이더 행 */
+  .light-row{
+    display:grid;grid-template-columns:auto 1fr 38px;
+    align-items:center;gap:10px;padding:8px 0;
+  }
+  .light-row + .light-row{border-top:1px dashed rgba(90,130,220,0.18)}
+  .light-name{
+    display:flex;align-items:center;gap:8px;width:104px;
+    font-weight:700;font-size:13px;
+  }
+  .cdot{width:11px;height:11px;border-radius:50%;flex:none}
+  .cdot.r{background:var(--red);box-shadow:0 0 9px var(--red)}
+  .cdot.g{background:var(--green);box-shadow:0 0 9px var(--green)}
+  .cdot.b{background:var(--blue);box-shadow:0 0 9px var(--blue)}
+  .val{
+    font-variant-numeric:tabular-nums;text-align:right;
+    font-size:12px;color:var(--accent);font-weight:700;
+  }
+
+  /* 토글 스위치 */
+  .switch{position:relative;width:38px;height:21px;flex:none;cursor:pointer;display:inline-block}
+  .switch input{opacity:0;width:0;height:0;position:absolute}
+  .switch .track{
+    position:absolute;inset:0;border-radius:999px;
+    background:#242f4d;border:1px solid var(--panel-border);
+    transition:background .2s, box-shadow .2s;
+  }
+  .switch .track::after{
+    content:'';position:absolute;top:2px;left:2px;width:15px;height:15px;
+    border-radius:50%;background:#8a96b8;transition:all .2s;
+    box-shadow:0 1px 3px rgba(0,0,0,.4);
+  }
+  .switch input:checked + .track{background:var(--sw,var(--accent));border-color:transparent;box-shadow:0 0 10px var(--sw,var(--accent))}
+  .switch input:checked + .track::after{left:19px;background:#fff}
+  .switch.r{--sw:var(--red)} .switch.g{--sw:var(--green)} .switch.b{--sw:var(--blue)}
+
+  /* 슬라이더 */
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;width:100%;height:22px;
+    background:transparent;cursor:pointer;min-width:0;
+  }
+  input[type=range]::-webkit-slider-runnable-track{
+    height:6px;border-radius:3px;background:var(--trk,#1e293b)
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;width:18px;height:18px;margin-top:-6px;
+    border-radius:50%;background:#f0f9ff;border:3px solid var(--thm,var(--accent));
+    box-shadow:0 0 10px var(--thm,var(--accent));cursor:pointer;
+  }
+  input[type=range]::-moz-range-track{height:6px;border-radius:3px;background:var(--trk,#1e293b)}
+  input[type=range]::-moz-range-thumb{
+    width:12px;height:12px;border-radius:50%;background:#f0f9ff;
+    border:3px solid var(--thm,var(--accent));box-shadow:0 0 10px var(--thm,var(--accent));cursor:pointer;
+  }
+  input[type=range].r{--trk:linear-gradient(90deg,#1e293b,var(--red));--thm:var(--red)}
+  input[type=range].g{--trk:linear-gradient(90deg,#1e293b,var(--green));--thm:var(--green)}
+  input[type=range].b{--trk:linear-gradient(90deg,#1e293b,var(--blue));--thm:var(--blue)}
+  input[type=range]:disabled{opacity:.35;cursor:not-allowed}
+
+  /* 프리셋 */
+  .presets{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
+  .presets .chip{
+    width:10px;height:10px;border-radius:3px;flex:none;
+    border:1px solid rgba(255,255,255,.25);
+  }
+  .reset-btn{
+    margin-top:11px;width:100%;
+    border:1px solid var(--panel-border);background:transparent;
+    color:var(--text-dim);font-size:12px;font-weight:600;font-family:inherit;
+    padding:8px 13px;border-radius:10px;cursor:pointer;
+    transition:all .15s;
+  }
+  .reset-btn:hover{color:var(--text-main);border-color:var(--accent)}
+
+  /* 물체 선택 */
+  #objectCard{display:none}
+  #objectCard.show{display:block}
+  .obj-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+  .obj-grid .tbtn{
+    flex-direction:column;gap:4px;
+    border-radius:12px;padding:9px 4px 7px;
+    font-size:11px;
+  }
+  .obj-grid .tbtn .emo{font-size:22px;line-height:1;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5))}
+
+  /* ── ★ 개조식으로 새로 다듬은 학습 개념 카드 ★ ── */
+  .card-header-toggle {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+    margin-bottom: 0 !important;
+  }
+  .card-header-toggle .toggle-btn {
+    font-size: 11px;
+    color: var(--accent);
+    background: rgba(56, 189, 248, 0.12);
+    padding: 3px 8px;
+    border-radius: 12px;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    transition: all 0.2s;
+  }
+  .card-header-toggle:hover .toggle-btn {
+    background: rgba(56, 189, 248, 0.25);
+  }
+
+  .concept-list{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    margin-top: 12px;
+    transition: max-height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease;
+    max-height: 600px;
+    opacity: 1;
+    overflow: hidden;
+  }
+  .concept-list.collapsed {
+    max-height: 0;
+    opacity: 0;
+    margin-top: 0;
+    padding: 0;
+  }
+
+  .concept-item{
+    background:rgba(8, 12, 24, 0.45);
+    border:1px solid rgba(90, 130, 220, 0.18);
+    border-radius:10px;
+    padding:10px 12px;
+  }
+  .concept-item .ct{
+    font-size:12.5px;font-weight:800;color:var(--accent);
+    margin-bottom:6px;display:flex;align-items:center;gap:5px;
+  }
+  /* 개조식 스타일 (Bullet points) */
+  .concept-item ul{
+    list-style:none;padding-left:0;display:flex;flex-direction:column;gap:4px;
+  }
+  .concept-item li{
+    font-size:12px;line-height:1.5;color:var(--text-dim);
+    position:relative;padding-left:11px;
+  }
+  .concept-item li::before{
+    content:'•';position:absolute;left:0;top:0;color:var(--accent);font-weight:bold;
+  }
+  .concept-item li b{color:var(--text-main);font-weight:700}
+
+  /* ── 반응형 ───────────────────────────── */
+  @media (max-width:920px){
+    .wrap{padding:12px 12px 32px}
+    main{grid-template-columns:1fr}
+    .stage-wrap{position:static}
+    .caption{left:8px;right:8px;bottom:8px;padding:8px 11px;font-size:12px;border-radius:10px}
+    header h1{font-size:15.5px}
+    .stage-overlay-readout{padding:6px 10px;gap:8px}
+    .stage-swatch{width:28px;height:28px}
+    .stage-read-name{font-size:12px}
+    .stage-read-code{font-size:10px}
+    /* 좁은 화면: 좌측 힌트가 우측 색상 위젯과 겹치지 않게 폭 제한 + 줄바꿈 */
+    .stage-overlay-hint{max-width:calc(100% - 190px)}
+    .stage-overlay-hint span{font-size:11px;padding:5px 10px;white-space:normal;line-height:1.4}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="logo">🔦</div>
+  <div>
+    <h1>빛의 합성 시뮬레이션 — 빛의 삼원색</h1>
+    <p class="sub">중학교 2학년 과학 · 빛과 파동</p>
+  </div>
+</header>
+
+<main>
+  <!-- ═══ 좌측: 암실 시뮬레이션 ═══ -->
+  <section class="stage-wrap">
+    <div class="stage">
+      <canvas id="cv"></canvas>
+
+      <!-- 시뮬레이션 상단 좌측: 안내 뱃지 -->
+      <div class="stage-overlay-hint">
+        <span>🖱 조명을 드래그해서 겹쳐 보세요</span>
+        <span id="objHint" style="display:none">🍎 물체도 드래그해서 옮길 수 있어요</span>
+      </div>
+
+      <!-- ★ 시뮬레이션 상단 우측: 실시간 색상 분석 결과 오버레이 ★ -->
+      <div class="stage-overlay-readout">
+        <div class="stage-swatch" id="stgSwatch"></div>
+        <div class="stage-read-info">
+          <div class="stage-read-role" id="stgRole">중심부 합성색</div>
+          <div class="stage-read-name" id="stgName">흰색 (백색광)</div>
+          <div class="stage-read-code" id="stgCode">#FFFFFF (255,255,255)</div>
+        </div>
+      </div>
+
+      <div class="caption hidden" id="objCaption"></div>
+    </div>
+  </section>
+
+  <!-- ═══ 우측: 조작 패널 ═══ -->
+  <aside class="panel">
+
+    <div class="card">
+      <h2><span class="dot"></span>모드 선택</h2>
+      <div class="mode-switch">
+        <button class="tbtn on" id="modeLight">💡 일반 조명 모드</button>
+        <button class="tbtn" id="modeObject">🍎 물체 관찰 모드</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="dot"></span>RGB 조명 조절</h2>
+
+      <div class="light-row">
+        <div class="light-name">
+          <label class="switch r"><input type="checkbox" id="onR" checked><span class="track"></span></label>
+          <span class="cdot r"></span>빨강 R
+        </div>
+        <input type="range" class="r" id="sldR" min="0" max="255" value="255" aria-label="빨간 조명 밝기">
+        <div class="val" id="valR">255</div>
+      </div>
+
+      <div class="light-row">
+        <div class="light-name">
+          <label class="switch g"><input type="checkbox" id="onG" checked><span class="track"></span></label>
+          <span class="cdot g"></span>초록 G
+        </div>
+        <input type="range" class="g" id="sldG" min="0" max="255" value="255" aria-label="초록 조명 밝기">
+        <div class="val" id="valG">255</div>
+      </div>
+
+      <div class="light-row">
+        <div class="light-name">
+          <label class="switch b"><input type="checkbox" id="onB" checked><span class="track"></span></label>
+          <span class="cdot b"></span>파랑 B
+        </div>
+        <input type="range" class="b" id="sldB" min="0" max="255" value="255" aria-label="파란 조명 밝기">
+        <div class="val" id="valB">255</div>
+      </div>
+
+      <div class="presets">
+        <button class="tbtn" data-preset="ry"><span class="chip" style="background:#ff0"></span>빨강+초록 = 노랑</button>
+        <button class="tbtn" data-preset="cy"><span class="chip" style="background:#0ff"></span>초록+파랑 = 청록</button>
+        <button class="tbtn" data-preset="mg"><span class="chip" style="background:#f0f"></span>빨강+파랑 = 자홍</button>
+        <button class="tbtn" data-preset="wh"><span class="chip" style="background:#fff"></span>모두 켜기 = 흰색</button>
+      </div>
+
+      <button class="reset-btn" id="resetPos">↺ 조명 위치 초기화</button>
+    </div>
+
+    <div class="card" id="objectCard">
+      <h2><span class="dot"></span>관찰할 물체 선택</h2>
+      <div class="obj-grid">
+        <button class="tbtn on" data-obj="apple"><span class="emo">🍎</span>빨간 사과</button>
+        <button class="tbtn" data-obj="leaf"><span class="emo">🍃</span>초록 나뭇잎</button>
+        <button class="tbtn" data-obj="ball"><span class="emo">🔵</span>파란 공</button>
+        <button class="tbtn" data-obj="paper"><span class="emo">📄</span>흰색 종이</button>
+      </div>
+    </div>
+
+    <!-- ★ 개조식(Bullet points)으로 다듬은 접기/펼치기 학습 개념 카드 ★ -->
+    <div class="card">
+      <h2 class="card-header-toggle" id="conceptToggleHeader">
+        <span><span class="dot"></span>학습 개념 정리</span>
+        <span class="toggle-btn" id="conceptToggleBtn">접기 ▲</span>
+      </h2>
+      <div class="concept-list" id="conceptList">
+
+        <div class="concept-item">
+          <div class="ct">💡 빛의 삼원색 (RGB)</div>
+          <ul>
+            <li><b>기본색:</b> 빨강(R), 초록(G), 파랑(B)</li>
+            <li><b>활용:</b> TV, 스마트폰 디스플레이의 색 표현 원리</li>
+          </ul>
+        </div>
+
+        <div class="concept-item">
+          <div class="ct">☀️ 빛의 합성 (가산 혼합)</div>
+          <ul>
+            <li><b>특징:</b> 빛을 섞을수록 <b>점점 밝아짐</b> (물감과 반대)</li>
+            <li><b>빨강 + 초록:</b> <b>노랑 (Yellow)</b></li>
+            <li><b>초록 + 파랑:</b> <b>청록 (Cyan)</b></li>
+            <li><b>빨강 + 파랑:</b> <b>자홍 (Magenta)</b></li>
+            <li><b>모두 합성:</b> <b>흰색 (백색광)</b></li>
+          </ul>
+        </div>
+
+        <div class="concept-item">
+          <div class="ct">🍎 물체의 색을 보는 원리</div>
+          <ul>
+            <li><b>반사:</b> 물체는 <b>자신과 같은 색의 빛만 반사</b>함</li>
+            <li><b>예시:</b> 빨간 사과는 <b>빨간빛만 반사</b>하고 나머지는 흡수</li>
+            <li><b>암전:</b> 반사할 빛이 없는 조명 아래에서는 <b>검게 보임</b></li>
+          </ul>
+        </div>
+
+      </div>
+    </div>
+
+  </aside>
+</main>
+
+</div>
+
+<script>
+'use strict';
+/* ══════════════════════════════════════════════════════
+   빛의 합성(가산 혼합) 시뮬레이션
+═══════════════════════════════════════════════════════ */
+const cv  = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+
+let W = 0, H = 0, DPR = 1;
+
+const DEFAULT_POS = { r:[0.50,0.36], g:[0.37,0.60], b:[0.63,0.60] };
+const lights = [
+  { id:'r', label:'R', on:true, val:255, x:DEFAULT_POS.r[0], y:DEFAULT_POS.r[1], rgb:v=>[v,0,0] },
+  { id:'g', label:'G', on:true, val:255, x:DEFAULT_POS.g[0], y:DEFAULT_POS.g[1], rgb:v=>[0,v,0] },
+  { id:'b', label:'B', on:true, val:255, x:DEFAULT_POS.b[0], y:DEFAULT_POS.b[1], rgb:v=>[0,0,v] },
+];
+
+let mode = 'light';
+let currentObj = 'apple';
+const objPos = { x:0.5, y:0.55 };
+
+const OBJECTS = {
+  apple: { name:'빨간 사과',   refl:[1,0,0] },
+  leaf:  { name:'초록 나뭇잎', refl:[0,1,0] },
+  ball:  { name:'파란 공',     refl:[0,0,1] },
+  paper: { name:'흰색 종이',   refl:[1,1,1] },
+};
+
+const lightRadius = () => Math.min(W, H) * 0.36;
+const px = n => n * W;
+const py = n => n * H;
+
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  const rect = cv.getBoundingClientRect();
+  W = rect.width; H = rect.height;
+  cv.width  = Math.round(W * DPR);
+  cv.height = Math.round(H * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  requestDraw();
+}
+new ResizeObserver(resize).observe(cv);
+
+/* 특정 위치의 입사광 계산 */
+function incidentAt(nx, ny){
+  const rad = lightRadius();
+  const out = [0,0,0];
+  for(const L of lights){
+    if(!L.on) continue;
+    const d = Math.hypot(px(L.x)-px(nx), py(L.y)-py(ny));
+    const t = Math.max(0, 1 - d/rad);
+    const c = L.rgb(L.val);
+    for(let i=0;i<3;i++) out[i] = 255 - (255-out[i]) * (255 - c[i]*t) / 255;
+  }
+  return out.map(v => Math.round(Math.min(255, v)));
+}
+
+function colorName(r,g,b){
+  const mx = Math.max(r,g,b);
+  if(mx < 10) return '검정 (빛 없음)';
+  const th = mx * 0.45;
+  const R = r >= th, G = g >= th, B = b >= th;
+  let name;
+  if(R&&G&&B) name = mx >= 200 ? '흰색 (백색광)' : mx >= 80 ? '회색빛 흰색' : '어두운 회색';
+  else if(R&&G) name = '노랑';
+  else if(G&&B) name = '청록 (시안)';
+  else if(R&&B) name = '자홍 (마젠타)';
+  else if(R) name = '빨강';
+  else if(G) name = '초록';
+  else name = '파랑';
+  if(!(R&&G&&B) && mx < 100) name = '어두운 ' + name;
+  return name;
+}
+const toHex = (r,g,b) => '#' + [r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('').toUpperCase();
+
+let drawQueued = false;
+function requestDraw(){
+  if(drawQueued) return;
+  drawQueued = true;
+  requestAnimationFrame(()=>{ drawQueued = false; draw(); });
+}
+
+function draw(){
+  if(W === 0) return;
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = '#04050a';
+  ctx.fillRect(0,0,W,H);
+  const vg = ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,Math.max(W,H)*0.75);
+  vg.addColorStop(0,'rgba(30,36,66,0.14)');
+  vg.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle = vg; ctx.fillRect(0,0,W,H);
+
+  /* screen 가산 혼합 */
+  ctx.globalCompositeOperation = 'screen';
+  const rad = lightRadius();
+  for(const L of lights){
+    if(!L.on || L.val < 1) continue;
+    const [r,g,b] = L.rgb(L.val);
+    const cx = px(L.x), cy = py(L.y);
+    const grd = ctx.createRadialGradient(cx,cy,0,cx,cy,rad);
+    grd.addColorStop(0, `rgba(${r},${g},${b},1)`);
+    grd.addColorStop(1, `rgba(${r},${g},${b},0)`);
+    ctx.fillStyle = grd;
+    ctx.beginPath(); ctx.arc(cx,cy,rad,0,Math.PI*2); ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+
+  if(mode === 'object'){
+    const inc  = incidentAt(objPos.x, objPos.y);
+    const refl = OBJECTS[currentObj].refl;
+    const seen = inc.map((v,i)=> Math.round(v * refl[i]));
+    drawObject(currentObj, px(objPos.x), py(objPos.y), Math.min(W,H)*0.13, seen);
+  }
+
+  drawHandles();
+  updateReadout();
+}
+
+const HANDLE_COLORS = { r:'#f43f5e', g:'#34d399', b:'#60a5fa' };
+function drawHandles(){
+  const rad = lightRadius();
+  for(const L of lights){
+    const cx = px(L.x), cy = py(L.y);
+    ctx.beginPath(); ctx.arc(cx,cy,rad,0,Math.PI*2);
+    ctx.setLineDash([4,7]);
+    ctx.strokeStyle = L.on ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.05)';
+    ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]);
+
+    ctx.beginPath(); ctx.arc(cx,cy,14,0,Math.PI*2);
+    ctx.fillStyle = 'rgba(8,10,18,0.85)'; ctx.fill();
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = L.on ? HANDLE_COLORS[L.id] : '#4a5170';
+    ctx.stroke();
+    ctx.fillStyle = L.on ? '#fff' : '#7c86a8';
+    ctx.font = '700 12px system-ui,sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(L.label, cx, cy+0.5);
+  }
+}
+
+function shade(c,f){ return `rgb(${c.map(v=>Math.round(v*f)).join(',')})`; }
+
+function drawObject(kind, x, y, s, color){
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(x, y+s*0.95, s*0.85, s*0.22, 0, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fill();
+
+  const body = ctx.createLinearGradient(x, y-s, x, y+s);
+  body.addColorStop(0, shade(color,1));
+  body.addColorStop(1, shade(color,0.55));
+
+  if(kind === 'apple'){
+    ctx.beginPath();
+    ctx.moveTo(x, y-s*0.55);
+    ctx.bezierCurveTo(x-s*1.15, y-s*1.05, x-s*1.15, y+s*0.75, x, y+s*0.85);
+    ctx.bezierCurveTo(x+s*1.15, y+s*0.75, x+s*1.15, y-s*1.05, x, y-s*0.55);
+    ctx.fillStyle = body; ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x, y-s*0.62);
+    ctx.quadraticCurveTo(x+s*0.12, y-s*0.95, x+s*0.05, y-s*1.12);
+    ctx.lineWidth = s*0.09; ctx.lineCap = 'round';
+    ctx.strokeStyle = '#4a3524'; ctx.stroke();
+  }
+  else if(kind === 'leaf'){
+    ctx.translate(x,y); ctx.rotate(-0.45);
+    ctx.beginPath();
+    ctx.moveTo(-s*1.1, 0);
+    ctx.quadraticCurveTo(0, -s*0.95, s*1.1, 0);
+    ctx.quadraticCurveTo(0, s*0.95, -s*1.1, 0);
+    ctx.fillStyle = body; ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-s*1.0,0); ctx.lineTo(s*0.95,0);
+    ctx.lineWidth = s*0.05;
+    ctx.strokeStyle = shade(color,0.45); ctx.stroke();
+    ctx.rotate(0.45); ctx.translate(-x,-y);
+  }
+  else if(kind === 'ball'){
+    ctx.beginPath(); ctx.arc(x,y,s*0.9,0,Math.PI*2);
+    ctx.fillStyle = body; ctx.fill();
+    ctx.save();
+    ctx.beginPath(); ctx.arc(x,y,s*0.9,0,Math.PI*2); ctx.clip();
+    ctx.beginPath(); ctx.ellipse(x,y,s*0.9,s*0.32,0,0,Math.PI*2);
+    ctx.lineWidth = s*0.07; ctx.strokeStyle = shade(color,0.5); ctx.stroke();
+    ctx.restore();
+  }
+  else if(kind === 'paper'){
+    ctx.translate(x,y); ctx.rotate(-0.08);
+    const w = s*1.5, h = s*1.9;
+    ctx.fillStyle = body;
+    ctx.fillRect(-w/2, -h/2, w, h);
+    ctx.strokeStyle = shade(color,0.6); ctx.lineWidth = 1.5;
+    for(let i=1;i<=4;i++){
+      ctx.beginPath();
+      ctx.moveTo(-w/2+s*0.22, -h/2+i*h/5.5);
+      ctx.lineTo( w/2-s*0.22, -h/2+i*h/5.5);
+      ctx.stroke();
+    }
+    ctx.rotate(0.08); ctx.translate(-x,-y);
+  }
+
+  if(kind !== 'paper'){
+    ctx.beginPath();
+    ctx.ellipse(x-s*0.35, y-s*0.4, s*0.28, s*0.16, -0.6, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(255,255,255,0.16)'; ctx.fill();
+  }
+  ctx.restore();
+}
+
+const $ = id => document.getElementById(id);
+
+function mixedLightColor(){
+  return [
+    lights[0].on ? lights[0].val : 0,
+    lights[1].on ? lights[1].val : 0,
+    lights[2].on ? lights[2].val : 0,
+  ];
+}
+
+/* ★ 캔버스 위 실시간 분석 위젯 데이터 업데이트 ★ */
+function updateReadout(){
+  let targetColor, targetRole;
+
+  if(mode === 'object'){
+    const inc = incidentAt(objPos.x, objPos.y);
+    const refl = OBJECTS[currentObj].refl;
+    targetColor = inc.map((v,i)=> Math.round(v*refl[i]));
+    targetRole = '관찰되는 물체 색';
+  } else {
+    targetColor = mixedLightColor();
+    targetRole = '중심부 합성색';
+  }
+
+  const [r,g,b] = targetColor;
+  const cName = colorName(r,g,b);
+  const hex = toHex(r,g,b);
+
+  $('stgRole').textContent = targetRole;
+  $('stgName').textContent = cName;
+  $('stgCode').textContent = `${hex} (${r},${g},${b})`;
+
+  const sw = $('stgSwatch');
+  sw.style.background = `rgb(${r},${g},${b})`;
+  sw.style.setProperty('--glow', `rgba(${r},${g},${b},0.6)`);
+
+  if(mode === 'object'){
+    updateCaption(targetColor, cName);
+  }
+}
+
+function updateCaption(seen, seenName){
+  const o = OBJECTS[currentObj];
+  const CH = ['빨간색','초록색','파란색'];
+  const reflNames = CH.filter((_,i)=> o.refl[i]===1);
+  const hasLight  = seen.some(v=>v>9);
+  let text;
+  if(currentObj === 'paper'){
+    text = hasLight
+      ? `<b>흰색 종이</b>는 모든 빛을 반사해요. 비추는 빛 그대로 <b>${seenName}</b>으로 보입니다.`
+      : `<b>흰색 종이</b>는 비추는 빛이 없어서 <b>검게</b> 보여요.`;
+  } else {
+    const rn = reflNames.join('·');
+    text = `<b>${o.name}</b>는 <b>${rn} 빛만 반사</b>해요. `;
+    text += hasLight
+      ? `조명 속에 ${rn} 빛이 있어 <b>${seenName}</b>으로 보여요.`
+      : `조명에 ${rn} 빛이 없어 <b>검은색</b>으로 보여요.`;
+  }
+  $('objCaption').innerHTML = '🔍 ' + text;
+}
+
+/* 인터랙션 */
+let dragTarget = null;
+
+function canvasPoint(e){
+  const rect = cv.getBoundingClientRect();
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+}
+
+cv.addEventListener('pointerdown', e => {
+  const p = canvasPoint(e);
+  const rad = lightRadius();
+
+  if(mode === 'object'){
+    const s = Math.min(W,H)*0.13;
+    if(Math.hypot(px(objPos.x)-p.x, py(objPos.y)-p.y) < s*1.3){
+      dragTarget = { type:'obj', dx:px(objPos.x)-p.x, dy:py(objPos.y)-p.y };
+    }
+  }
+
+  if(!dragTarget){
+    let closestL = null;
+    let minD = Infinity;
+
+    for(const L of lights){
+      const d = Math.hypot(px(L.x)-p.x, py(L.y)-p.y);
+      if(d <= rad && d < minD){
+        minD = d;
+        closestL = L;
+      }
+    }
+    if(closestL){
+      dragTarget = { type:'light', L: closestL, dx:px(closestL.x)-p.x, dy:py(closestL.y)-p.y };
+    }
+  }
+
+  if(dragTarget){
+    try{ cv.setPointerCapture(e.pointerId); }catch(_){}
+    cv.classList.add('dragging');
+    e.preventDefault();
+  }
+});
+
+cv.addEventListener('pointermove', e => {
+  if(!dragTarget) return;
+  e.preventDefault();
+  const p = canvasPoint(e);
+  const nx = Math.min(0.98, Math.max(0.02, (p.x + dragTarget.dx) / W));
+  const ny = Math.min(0.98, Math.max(0.02, (p.y + dragTarget.dy) / H));
+  if(dragTarget.type === 'light'){ dragTarget.L.x = nx; dragTarget.L.y = ny; }
+  else { objPos.x = nx; objPos.y = ny; }
+  requestDraw();
+});
+
+const endDrag = () => { dragTarget = null; cv.classList.remove('dragging'); };
+cv.addEventListener('pointerup', endDrag);
+cv.addEventListener('pointercancel', endDrag);
+cv.addEventListener('touchmove', e => e.preventDefault(), { passive:false });
+
+/* 슬라이더 & 토글 */
+[['R',0],['G',1],['B',2]].forEach(([k,i])=>{
+  const sld = $('sld'+k), chk = $('on'+k), val = $('val'+k);
+  sld.addEventListener('input', ()=>{
+    lights[i].val = +sld.value;
+    val.textContent = sld.value;
+    requestDraw();
+  });
+  chk.addEventListener('change', ()=>{
+    lights[i].on = chk.checked;
+    sld.disabled = !chk.checked;
+    requestDraw();
+  });
+});
+
+/* 프리셋 */
+const PRESETS = {
+  ry:[[true,255],[true,255],[false,0]],
+  cy:[[false,0],[true,255],[true,255]],
+  mg:[[true,255],[false,0],[true,255]],
+  wh:[[true,255],[true,255],[true,255]],
+};
+document.querySelectorAll('[data-preset]').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const ps = PRESETS[btn.dataset.preset];
+    ['R','G','B'].forEach((k,i)=>{
+      const [on,v] = ps[i];
+      lights[i].on = on; lights[i].val = v;
+      $('on'+k).checked = on;
+      $('sld'+k).value = v; $('sld'+k).disabled = !on;
+      $('val'+k).textContent = v;
+    });
+    requestDraw();
+  });
+});
+
+/* 초기화 */
+$('resetPos').addEventListener('click', ()=>{
+  lights.forEach(L=>{ [L.x, L.y] = DEFAULT_POS[L.id]; });
+  objPos.x = 0.5; objPos.y = 0.55;
+  requestDraw();
+});
+
+/* 모드 전환 */
+function setMode(m){
+  mode = m;
+  $('modeLight').classList.toggle('on', m==='light');
+  $('modeObject').classList.toggle('on', m==='object');
+  $('objectCard').classList.toggle('show', m==='object');
+  $('objCaption').classList.toggle('hidden', m!=='object');
+  $('objHint').style.display = m==='object' ? '' : 'none';
+  requestDraw();
+}
+$('modeLight').addEventListener('click', ()=>setMode('light'));
+$('modeObject').addEventListener('click', ()=>setMode('object'));
+
+/* 물체 선택 */
+document.querySelectorAll('[data-obj]').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    currentObj = btn.dataset.obj;
+    document.querySelectorAll('[data-obj]').forEach(b=>b.classList.toggle('on', b===btn));
+    requestDraw();
+  });
+});
+
+/* 접기/펼치기 */
+const conceptHeader = $('conceptToggleHeader');
+const conceptList = $('conceptList');
+const conceptBtn = $('conceptToggleBtn');
+
+conceptHeader.addEventListener('click', ()=>{
+  const isCollapsed = conceptList.classList.toggle('collapsed');
+  conceptBtn.textContent = isCollapsed ? '펼치기 ▼' : '접기 ▲';
+});
+
+resize();
+</script>
+</body>
+</html>

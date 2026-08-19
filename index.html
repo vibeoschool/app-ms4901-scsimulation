@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>과학 시뮬레이션 학습실</title>
+<meta name="description" content="인터랙티브 시뮬레이션으로 즐겁게 배우는 중학교 과학">
+<!-- Open Graph / SNS 공유 -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="과학 시뮬레이션 학습실">
+<meta property="og:description" content="인터랙티브 시뮬레이션으로 즐겁게 배우는 중학교 과학">
+<style>
+  :root{
+    --bg:#070b18;
+    --card:rgba(22,30,54,.66);
+    --card-border:rgba(120,150,220,.22);
+    --ink:#eef2ff;
+    --muted:#a7b3d6;
+    --accent:#7aa2ff;
+    --accent2:#c58bff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{min-height:100%}
+  body{
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Malgun Gothic",sans-serif;
+    color:var(--ink);background:var(--bg);position:relative;overflow-x:hidden;
+    padding:clamp(24px,5vw,56px) clamp(16px,4vw,44px) 56px;
+  }
+  body::before,body::after{content:"";position:fixed;inset:0;z-index:-2;pointer-events:none}
+  body::before{
+    background:
+      radial-gradient(1200px 700px at 15% -10%, rgba(90,120,255,.28), transparent 60%),
+      radial-gradient(1000px 800px at 100% 10%, rgba(180,90,255,.22), transparent 55%),
+      radial-gradient(900px 900px at 50% 120%, rgba(40,180,220,.16), transparent 60%),
+      linear-gradient(180deg,#070b18,#0a1024 60%,#070b18);
+  }
+  body::after{
+    background-image:
+      radial-gradient(1.4px 1.4px at 20% 30%, #fff, transparent),
+      radial-gradient(1.2px 1.2px at 70% 20%, #cdd8ff, transparent),
+      radial-gradient(1.6px 1.6px at 40% 70%, #fff, transparent),
+      radial-gradient(1.1px 1.1px at 85% 60%, #dfe6ff, transparent),
+      radial-gradient(1.3px 1.3px at 60% 85%, #fff, transparent),
+      radial-gradient(1px 1px at 10% 80%, #cdd8ff, transparent);
+    background-repeat:no-repeat;opacity:.7;
+  }
+
+  .shell{max-width:1180px;margin:0 auto}
+
+  /* ---------- Hero ---------- */
+  .hero{text-align:center;margin-bottom:clamp(26px,4vw,44px)}
+  .eyebrow{
+    display:inline-flex;align-items:center;gap:8px;
+    font-size:13px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+    padding:7px 15px;border-radius:999px;background:rgba(255,255,255,.04);border:1px solid var(--card-border);
+    margin-bottom:18px;
+  }
+  .hero h1{
+    font-size:clamp(28px,5.5vw,48px);line-height:1.12;font-weight:800;letter-spacing:-.02em;
+    background:linear-gradient(120deg,#fff 20%,var(--accent) 60%,var(--accent2));
+    -webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:14px;
+  }
+  .hero p{font-size:clamp(14px,2.2vw,17px);color:var(--muted);max-width:640px;margin:0 auto;line-height:1.6}
+
+  /* ---------- Subject filter bar ---------- */
+  .filterbar{
+    display:flex;flex-wrap:wrap;justify-content:center;gap:10px;
+    margin-bottom:clamp(22px,3.5vw,36px);
+  }
+  .filter-btn{
+    display:inline-flex;align-items:center;gap:7px;
+    padding:9px 16px;border-radius:999px;cursor:pointer;
+    font-size:14px;font-weight:600;color:var(--ink);
+    background:var(--card);border:1px solid var(--card-border);
+    backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+    transition:transform .15s ease,border-color .2s ease,background .2s ease,color .2s ease;
+  }
+  .filter-btn:hover{border-color:var(--accent);color:#fff;transform:translateY(-1px)}
+  .filter-btn.active{
+    background:linear-gradient(135deg,var(--accent),var(--accent2));color:#0a0f22;
+    border-color:transparent;box-shadow:0 8px 22px rgba(122,162,255,.4);
+  }
+
+  /* ---------- Layout: sidebar + content ---------- */
+  .layout{display:flex;gap:clamp(18px,3vw,32px);align-items:flex-start}
+
+  .sidebar{
+    position:sticky;top:24px;flex:0 0 auto;width:132px;
+    display:flex;flex-direction:column;gap:10px;
+  }
+  .side-label{font-size:12px;font-weight:600;letter-spacing:.1em;color:var(--muted);
+    text-transform:uppercase;padding:0 4px 4px;margin-bottom:2px}
+  .grade-btn{
+    display:flex;align-items:center;gap:10px;width:100%;
+    padding:14px 16px;border-radius:14px;cursor:pointer;
+    font-size:16px;font-weight:700;color:var(--ink);text-align:left;
+    background:var(--card);border:1px solid var(--card-border);
+    backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+    transition:transform .15s ease,border-color .2s ease,background .2s ease;
+  }
+  .grade-btn .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:0 0 auto;transition:background .2s ease}
+  .grade-btn:hover{transform:translateX(3px);border-color:rgba(150,180,255,.5)}
+  .grade-btn.active{
+    background:linear-gradient(135deg,var(--accent),var(--accent2));color:#0a0f22;
+    border-color:transparent;box-shadow:0 10px 26px rgba(122,162,255,.4);
+  }
+  .grade-btn.active .dot{background:#0a0f22}
+
+  .content{flex:1;min-width:0}
+
+  /* ---------- Grade panel ---------- */
+  .grade-panel{display:none;animation:fade .35s ease}
+  .grade-panel.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+  /* ---------- Unit ---------- */
+  .unit{margin-bottom:clamp(28px,4vw,44px)}
+  .unit:last-child{margin-bottom:0}
+  .unit.is-hidden{display:none!important}
+  .unit-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+  .unit-head h2{font-size:clamp(18px,3vw,23px);font-weight:800;letter-spacing:-.01em}
+  .unit-head .desc{font-size:13.5px;color:var(--muted);font-weight:500}
+  .unit-head .rule{flex:1;height:1px;min-width:40px;background:linear-gradient(90deg,var(--card-border),transparent)}
+
+  .grid{display:grid;gap:clamp(14px,2vw,20px);grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
+
+  /* ---------- Card ---------- */
+  .card{
+    position:relative;display:flex;flex-direction:column;height:100%;
+    background:var(--card);border:1px solid var(--card-border);border-radius:18px;
+    padding:0 0 16px;overflow:hidden;
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 16px 40px rgba(0,0,0,.4);
+    transition:transform .28s cubic-bezier(.2,.7,.3,1),border-color .28s ease,box-shadow .28s ease;
+    text-decoration:none;color:inherit;
+  }
+  .card:hover{transform:translateY(-7px);border-color:rgba(150,180,255,.55);box-shadow:0 26px 60px rgba(0,0,0,.55)}
+  .card:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+
+  .thumb{position:relative;height:96px;display:flex;align-items:center;justify-content:center;font-size:40px;overflow:hidden;flex:0 0 auto}
+  .thumb.c1,.thumb.c2{background:radial-gradient(120% 120% at 30% 20%,#2a3a7a,#0d1330)}
+  .thumb .glyph{filter:drop-shadow(0 6px 18px rgba(0,0,0,.5));transition:transform .35s ease}
+  .card:hover .thumb .glyph{transform:scale(1.08) rotate(-3deg)}
+  .thumb .rings{position:absolute;inset:0;opacity:.5;
+    background:
+      radial-gradient(circle at 50% 50%, transparent 38%, rgba(255,255,255,.06) 39%, transparent 41%),
+      radial-gradient(circle at 50% 50%, transparent 52%, rgba(255,255,255,.05) 53%, transparent 55%);
+  }
+
+  .card.is-hidden{display:none!important}
+  .card .body{padding:15px clamp(14px,2.6vw,18px) 0;flex:1 1 auto;display:flex;flex-direction:column}
+  .subject-badge{
+    flex:0 0 auto;
+    font-size:11px;font-weight:700;letter-spacing:.02em;line-height:1.4;
+    color:var(--badge-ink,#ffd27a);background:var(--badge-bg,rgba(255,196,90,.16));
+    padding:3px 8px;border-radius:999px;
+  }
+  /* 과목별 배지 색 */
+  .card[data-subject="earth"]   .subject-badge{--badge-ink:#6fd6e0;--badge-bg:rgba(90,200,225,.15)}
+  .card[data-subject="physics"] .subject-badge{--badge-ink:#ffd27a;--badge-bg:rgba(255,196,90,.16)}
+  .card[data-subject="chem"]    .subject-badge{--badge-ink:#c9a3ff;--badge-bg:rgba(180,130,255,.16)}
+  .card[data-subject="bio"]     .subject-badge{--badge-ink:#9be08a;--badge-bg:rgba(130,220,120,.16)}
+  .card h3{font-size:16px;font-weight:800;letter-spacing:-.01em;margin-bottom:7px;line-height:1.4;
+    display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .card p{font-size:13px;line-height:1.55;color:var(--muted)}
+
+  .run{
+    margin:15px clamp(14px,2.6vw,18px) 0;
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    padding:9px 16px;border-radius:11px;font-size:13.5px;font-weight:700;color:#0a0f22;
+    background:linear-gradient(120deg,var(--accent),#9ec0ff);box-shadow:0 8px 22px rgba(122,162,255,.4);
+    transition:gap .2s ease,filter .2s ease;
+  }
+  .card:hover .run{gap:14px;filter:brightness(1.06)}
+  .run .arrow{transition:transform .2s ease}
+  .card:hover .run .arrow{transform:translateX(4px)}
+
+  /* ---------- Empty grade ---------- */
+  .empty{
+    display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
+    padding:64px 24px;border:1px dashed var(--card-border);border-radius:20px;
+    background:rgba(255,255,255,.02);color:var(--muted);
+  }
+  .empty .ico{font-size:40px;margin-bottom:14px;opacity:.7}
+  .empty strong{color:var(--ink);font-size:17px;font-weight:700}
+  .empty small{display:block;margin-top:7px;font-size:13.5px}
+
+  footer{margin-top:clamp(40px,6vw,60px);text-align:center;color:var(--muted);font-size:13px;line-height:1.7}
+
+  /* ---------- Responsive: sidebar → top tabs ---------- */
+  @media (max-width:720px){
+    .layout{flex-direction:column;gap:18px}
+    .sidebar{position:static;width:100%;flex-direction:row;overflow-x:auto;gap:8px;padding-bottom:4px}
+    .side-label{display:none}
+    .grade-btn{width:auto;flex:0 0 auto;padding:11px 18px;justify-content:center}
+    .grade-btn:hover{transform:none}
+  }
+  @media (max-width:560px){.grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}.thumb{height:88px;font-size:38px}}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}.grade-panel{animation:none}}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <header class="hero">
+    <span class="eyebrow">🧪 과학 시뮬레이션 모음</span>
+    <h1>과학 시뮬레이션 학습실</h1>
+  </header>
+
+  <!-- ===== 과목별 필터바 ===== -->
+  <nav class="filterbar" aria-label="과목 필터">
+    <button class="filter-btn active" data-subject="all">전체 과목</button>
+    <button class="filter-btn" data-subject="physics">⚡ 물리학</button>
+    <button class="filter-btn" data-subject="chem">🧪 화학</button>
+    <button class="filter-btn" data-subject="bio">🌱 생명과학</button>
+    <button class="filter-btn" data-subject="earth">🌍 지구과학</button>
+  </nav>
+
+  <div class="layout">
+
+    <!-- ===== 왼쪽 학년 선택 ===== -->
+    <nav class="sidebar" aria-label="학년 선택">
+      <span class="side-label">학년</span>
+      <button class="grade-btn active" data-grade="g1"><span class="dot"></span>중 1</button>
+      <button class="grade-btn" data-grade="g2"><span class="dot"></span>중 2</button>
+      <button class="grade-btn" data-grade="g3"><span class="dot"></span>중 3</button>
+    </nav>
+
+    <!-- ===== 오른쪽 콘텐츠 ===== -->
+    <div class="content">
+
+      <!-- ▼ 중 1 -->
+      <section class="grade-panel active" data-grade="g1">
+        <div class="unit">
+          <div class="unit-head">
+            <h2>Ⅶ. 태양계</h2>
+            <span class="rule"></span>
+          </div>
+          <div class="grid">
+            <a class="card" href="sim7.html" data-subject="earth" aria-label="달 관측관 시뮬레이션 실행하기">
+              <div class="thumb c1"><div class="rings"></div><div class="glyph">🌙</div></div>
+              <div class="body">
+                <h3><span class="subject-badge">지구과학</span>달 관측관</h3>
+                <p>천체망원경으로 달을 관측하며 표면의 크레이터와 위상 변화를 탐구합니다.</p>
+              </div>
+              <span class="run"><span>실행하기</span><span class="arrow" aria-hidden="true">→</span></span>
+            </a>
+
+            <a class="card" href="sim1.html" data-subject="earth" aria-label="일식과 월식 시뮬레이션 실행하기">
+              <div class="thumb c1"><div class="rings"></div><div class="glyph">🌒</div></div>
+              <div class="body">
+                <h3><span class="subject-badge">지구과학</span>일식과 월식</h3>
+                <p>태양–지구–달의 위치를 바꿔가며 일식과 월식이 어떻게 일어나는지 관찰합니다. 공전 속도도 조절할 수 있어요.</p>
+              </div>
+              <span class="run"><span>실행하기</span><span class="arrow" aria-hidden="true">→</span></span>
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <!-- ▼ 중 2 -->
+      <section class="grade-panel" data-grade="g2">
+        <div class="unit">
+          <div class="unit-head">
+            <h2>Ⅲ. 빛과 파동</h2>
+            <span class="rule"></span>
+          </div>
+          <div class="grid">
+            <a class="card" href="sim5.html" data-subject="physics" aria-label="빛의 합성 시뮬레이션 실행하기">
+              <div class="thumb c2"><div class="rings"></div><div class="glyph">🌈</div></div>
+              <div class="body">
+                <h3><span class="subject-badge">물리학</span>빛의 합성</h3>
+                <p>빛의 삼원색(빨강·초록·파랑)을 겹쳐 보며 여러 색의 빛이 어떻게 합쳐지는지 직접 조작하며 탐구합니다.</p>
+              </div>
+              <span class="run"><span>실행하기</span><span class="arrow" aria-hidden="true">→</span></span>
+            </a>
+
+            <a class="card alt" href="sim6.html" data-subject="physics" aria-label="소리의 성질 시뮬레이션 실행하기">
+              <div class="thumb c1"><div class="rings"></div><div class="glyph">🔊</div></div>
+              <div class="body">
+                <h3><span class="subject-badge">물리학</span>소리의 성질</h3>
+                <p>소리의 세기와 높낮이를 바꿔가며 파동의 진폭과 진동수가 어떻게 달라지는지 직접 탐구합니다.</p>
+              </div>
+              <span class="run"><span>실행하기</span><span class="arrow" aria-hidden="true">→</span></span>
+            </a>
+          </div>
+        </div>
+
+        <div class="unit">
+          <div class="unit-head">
+            <h2>Ⅷ. 별과 우주</h2>
+            <span class="rule"></span>
+          </div>
+          <div class="grid">
+            <a class="card" href="sim3.html" data-subject="earth" aria-label="별의 밝기와 등급 실행하기">
+              <div class="thumb c1"><div class="rings"></div><div class="glyph">⭐</div></div>
+              <div class="body">
+                <h3><span class="subject-badge">지구과학</span>별의 밝기와 등급</h3>
+                <p>별의 밝기를 비교하고 겉보기 등급과 절대 등급의 개념을 직접 조작하며 탐구합니다.</p>
+              </div>
+              <span class="run"><span>실행하기</span><span class="arrow" aria-hidden="true">→</span></span>
+            </a>
+
+            <a class="card alt" href="sim4.html" data-subject="earth" aria-label="우주의 팽창 시뮬레이션 실행하기">
+              <div class="thumb c2"><div class="rings"></div><div class="glyph">🌌</div></div>
+              <div class="body">
+                <h3><span class="subject-badge">지구과학</span>우주의 팽창</h3>
+                <p>커지는 우주 공간 속 은하들의 움직임을 직접 조작하며, 우주에 중심이 없다는 것을 탐구합니다.</p>
+              </div>
+              <span class="run"><span>실행하기</span><span class="arrow" aria-hidden="true">→</span></span>
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <!-- ▼ 중 3 (준비 중) -->
+      <section class="grade-panel" data-grade="g3">
+        <div class="empty">
+          <div class="ico">🧰</div>
+          <strong>중 3 시뮬레이션 준비 중</strong>
+          <small>단원별 자료가 곧 추가됩니다.</small>
+        </div>
+      </section>
+
+    </div><!-- /content -->
+  </div><!-- /layout -->
+
+  <footer>
+    학년·단원별 과학 시뮬레이션 학습 자료 · 왼쪽에서 학년을 선택하세요.
+  </footer>
+
+</div>
+
+<script>
+  // 학년 탭 전환
+  const buttons = document.querySelectorAll('.grade-btn');
+  const panels  = document.querySelectorAll('.grade-panel');
+  function setGrade(g){
+    buttons.forEach(b => b.classList.toggle('active', b.dataset.grade === g));
+    panels.forEach(p => p.classList.toggle('active', p.dataset.grade === g));
+  }
+  buttons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      setGrade(btn.dataset.grade);
+      try { localStorage.setItem('activeGrade', btn.dataset.grade); } catch(e){}
+    });
+  });
+  // 홈으로 돌아왔을 때 마지막으로 본 학년 복원
+  try {
+    const saved = localStorage.getItem('activeGrade');
+    if (saved && [...buttons].some(b => b.dataset.grade === saved)) setGrade(saved);
+  } catch(e){}
+
+  // 과목별 필터
+  const filterBtns = document.querySelectorAll('.filter-btn');
+  const cards = document.querySelectorAll('.card');
+  const units = document.querySelectorAll('.unit');
+  filterBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const subject = btn.dataset.subject;
+      filterBtns.forEach(b => b.classList.toggle('active', b === btn));
+      cards.forEach(card => {
+        const show = subject === 'all' || card.dataset.subject === subject;
+        card.classList.toggle('is-hidden', !show);
+      });
+      // 보이는 카드가 없는 단원은 단원명까지 숨김
+      units.forEach(unit => {
+        const hasVisible = unit.querySelector('.card:not(.is-hidden)');
+        unit.classList.toggle('is-hidden', !hasVisible);
+      });
+    });
+  });
+</script>
+</body>
+</html>

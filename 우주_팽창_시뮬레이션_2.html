@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>우주 팽창 시뮬레이션 — 커지는 우주 공간, 중심 없는 우주</title>
+<style>
+  :root {
+    --bg-deep: #05070f;
+    --panel: rgba(15, 20, 35, 0.92);
+    --panel-border: rgba(90, 130, 220, 0.25);
+    --text-main: #e8edf7;
+    --text-dim: #9aa7c2;
+    --accent: #38bdf8;
+    --accent-warm: #f97316;
+    --danger: #f43f5e;
+    --card-bg: rgba(30, 40, 65, 0.55);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body {
+    font-family: 'Pretendard', 'Noto Sans KR', 'Malgun Gothic', -apple-system, sans-serif;
+    background: var(--bg-deep);
+    color: var(--text-main);
+  }
+
+  #app { display: flex; width: 100%; height: 100%; }
+
+  /* ===== 3D 뷰포트 ===== */
+  #viewport { position: relative; flex: 1; min-width: 0; }
+  #viewport canvas { display: block; cursor: grab; touch-action: none; /* 모바일 드래그 시 화면 스크롤 방지 */ }
+  #viewport canvas:active { cursor: grabbing; }
+
+  /* 상단 타이틀 오버레이 */
+  #topbar {
+    position: absolute; top: 0; left: 0; right: 0;
+    padding: 14px 20px 14px 76px; /* 왼쪽 여백: 랜딩페이지 홈 버튼에 제목이 가리지 않도록 */
+    display: flex; align-items: center; gap: 12px;
+    background: linear-gradient(to bottom, rgba(5,7,15,0.85), transparent);
+    pointer-events: none; z-index: 10;
+  }
+  #topbar .logo {
+    width: 34px; height: 34px; border-radius: 10px;
+    background: radial-gradient(circle at 35% 35%, #7dd3fc, #0369a1);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; box-shadow: 0 0 18px rgba(56,189,248,0.45);
+  }
+  #topbar h1 { font-size: 16px; font-weight: 700; letter-spacing: -0.02em; }
+  #topbar p  { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+
+  /* ===== 우상단 도구 툴바 (체험 / 보기 그룹) ===== */
+  #toolbar {
+    position: absolute; top: 62px; right: 14px;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
+    z-index: 11; max-width: calc(100% - 28px);
+  }
+  .tool-group {
+    display: flex; align-items: center; gap: 6px;
+    flex-wrap: wrap; justify-content: flex-end;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 14px;
+    padding: 6px 8px 6px 12px;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.35);
+  }
+  .tg-label {
+    font-size: 10.5px; font-weight: 800; color: var(--text-dim);
+    letter-spacing: 0.14em; margin-right: 4px;
+    user-select: none;
+  }
+  .tbtn {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 12px; font-weight: 700;
+    color: var(--text-dim);
+    background: rgba(8, 12, 24, 0.5);
+    border: 1px solid var(--panel-border);
+    border-radius: 20px;
+    padding: 7px 12px; cursor: pointer;
+    transition: all .15s;
+    user-select: none;
+  }
+  .tbtn:hover { color: var(--text-main); border-color: var(--accent); }
+  .tbtn.on {
+    color: #0c1428;
+    background: linear-gradient(135deg, #7dd3fc, #38bdf8);
+    border-color: #7dd3fc;
+    box-shadow: 0 0 14px rgba(56,189,248,0.45);
+  }
+  .tbtn.warm.on {
+    background: linear-gradient(135deg, #fdba74, #f97316);
+    border-color: #fdba74;
+    box-shadow: 0 0 14px rgba(249,115,22,0.5);
+  }
+  .tbtn:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* 2D 레이블 레이어 */
+  #labels { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 5; }
+  .glabel {
+    position: absolute; transform: translate(-50%, -130%);
+    text-align: center; white-space: nowrap;
+    transition: opacity .15s;
+    pointer-events: none; /* 레이블이 3D 클릭/드래그를 가로막지 않도록 */
+  }
+  .glabel .name {
+    display: inline-block;
+    font-size: 12px; font-weight: 700;
+    padding: 2px 9px; border-radius: 20px;
+    background: rgba(8, 12, 24, 0.75);
+    border: 1px solid rgba(255,255,255,0.18);
+    backdrop-filter: blur(2px);
+  }
+  .glabel .vel {
+    display: block; margin-top: 3px;
+    font-size: 11px; font-weight: 600;
+    color: #fda4af; text-shadow: 0 0 6px rgba(0,0,0,0.9);
+    font-variant-numeric: tabular-nums;
+    transition: opacity .3s;
+  }
+  /* 시간이 멈춰 있을 땐 속도 값을 흐리게 → "팽창 중일 때의 관측값"임을 표현 */
+  #labels.paused .vel { opacity: .45; }
+  .glabel.observer .name {
+    background: rgba(159, 18, 57, 0.85);
+    border-color: #fb7185;
+    box-shadow: 0 0 14px rgba(244, 63, 94, 0.5);
+  }
+  .glabel.observer .vel { color: #fecdd3; }
+
+  /* 안내 힌트 */
+  #hint {
+    position: absolute; bottom: 92px; left: 50%; transform: translateX(-50%);
+    font-size: 12.5px; color: var(--text-dim);
+    background: rgba(8,12,24,0.72); border: 1px solid var(--panel-border);
+    padding: 6px 16px; border-radius: 30px;
+    pointer-events: none; z-index: 10;
+    animation: hintPulse 2.6s ease-in-out infinite;
+    max-width: calc(100% - 32px); text-align: center;
+    transition: color .2s, border-color .2s;
+  }
+  @keyframes hintPulse { 0%,100% { opacity: .95; } 50% { opacity: .55; } }
+
+  /* 좌하단 조작법 안내 칩 */
+  #controlsHelp {
+    position: absolute; left: 14px; bottom: 18px;
+    font-size: 11.5px; color: var(--text-dim);
+    background: rgba(8,12,24,0.6); border: 1px solid var(--panel-border);
+    padding: 6px 12px; border-radius: 30px;
+    pointer-events: none; z-index: 10;
+    opacity: .85;
+  }
+
+  /* ===== 하단 시간 컨트롤 바 ===== */
+  #controls {
+    position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 14px;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 16px;
+    padding: 12px 18px;
+    z-index: 10;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+    max-width: calc(100% - 32px);
+  }
+  #playBtn {
+    width: 42px; height: 42px; border-radius: 50%;
+    border: none; cursor: pointer;
+    background: linear-gradient(135deg, #38bdf8, #2563eb);
+    color: #fff; font-size: 15px;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform .12s, box-shadow .2s;
+    box-shadow: 0 0 16px rgba(56,189,248,0.35);
+    flex-shrink: 0;
+  }
+  #playBtn:hover { transform: scale(1.08); }
+  #playBtn.playing { background: linear-gradient(135deg, #fb923c, #ea580c); box-shadow: 0 0 16px rgba(249,115,22,0.4); }
+  .slider-wrap { display: flex; flex-direction: column; gap: 5px; min-width: 220px; }
+  .slider-head { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); }
+  .slider-head b { color: var(--accent); font-variant-numeric: tabular-nums; }
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 6px; border-radius: 3px;
+    background: linear-gradient(90deg, #1e293b, #38bdf8);
+    outline: none; cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: #f0f9ff; border: 3px solid #38bdf8;
+    box-shadow: 0 0 10px rgba(56,189,248,0.7); cursor: pointer;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 15px; height: 15px; border-radius: 50%;
+    background: #f0f9ff; border: 3px solid #38bdf8; cursor: pointer;
+  }
+  #resetBtn {
+    border: 1px solid var(--panel-border); background: transparent;
+    color: var(--text-dim); font-size: 12px; font-weight: 600;
+    padding: 8px 13px; border-radius: 10px; cursor: pointer;
+    transition: all .15s; white-space: nowrap; flex-shrink: 0;
+  }
+  #resetBtn:hover { color: var(--text-main); border-color: var(--accent); }
+
+  /* ===== 우측 사이드바 (슬림) ===== */
+  #sidebar {
+    width: 300px; flex-shrink: 0; height: 100%;
+    background: var(--panel);
+    border-left: 1px solid var(--panel-border);
+    overflow-y: auto;
+    padding: 16px 14px 22px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  #sidebar::-webkit-scrollbar { width: 6px; }
+  #sidebar::-webkit-scrollbar-thumb { background: rgba(120,140,190,0.3); border-radius: 3px; }
+
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 14px;
+    padding: 13px 14px;
+  }
+  .card h2 {
+    font-size: 12.5px; font-weight: 700; letter-spacing: -0.01em;
+    display: flex; align-items: center; gap: 7px; margin-bottom: 9px;
+    color: var(--text-dim);
+  }
+  .card h2 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); flex-shrink: 0; }
+
+  /* 관측 기준 카드 */
+  #observerCard { border-color: rgba(244,63,94,0.45); background: rgba(70, 20, 35, 0.35); }
+  #observerCard h2 { margin-bottom: 6px; }
+  #observerCard h2 .dot { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+  #observerName {
+    font-size: 22px; font-weight: 800; color: #fda4af;
+    display: flex; align-items: center; gap: 9px;
+  }
+  #observerName .ring-ico {
+    width: 17px; height: 17px; border: 3px solid var(--danger); border-radius: 50%;
+    box-shadow: 0 0 8px rgba(244,63,94,0.8);
+    animation: ringPulse 1.6s ease-in-out infinite;
+    flex-shrink: 0;
+  }
+  @keyframes ringPulse { 0%,100% { transform: scale(1);} 50% { transform: scale(1.25);} }
+
+  /* 은하 목록 테이블 */
+  #galaxyTable { width: 100%; border-collapse: collapse; font-size: 12px; }
+  #galaxyTable th {
+    text-align: left; color: var(--text-dim); font-weight: 600;
+    padding: 4px 6px; border-bottom: 1px solid var(--panel-border); font-size: 11px;
+  }
+  #galaxyTable th:nth-child(2), #galaxyTable th:nth-child(3),
+  #galaxyTable td:nth-child(2), #galaxyTable td:nth-child(3) { text-align: right; }
+  #galaxyTable td {
+    padding: 5.5px 6px; border-bottom: 1px solid rgba(90,130,220,0.1);
+    font-variant-numeric: tabular-nums;
+  }
+  #galaxyTable tbody tr { cursor: pointer; transition: background .12s; }
+  #galaxyTable tbody tr:hover { background: rgba(56,189,248,0.1); }
+  #galaxyTable tbody tr.obs-row { background: rgba(244,63,94,0.14); }
+  #galaxyTable tbody tr.obs-row td:first-child { color: #fda4af; font-weight: 700; }
+  .gdot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+  .vel-cell { color: #fda4af; font-weight: 600; }
+
+  /* 미션 카드 (한 문장) */
+  #missionCard {
+    border-color: rgba(56,189,248,0.4);
+    background: rgba(56,189,248,0.08);
+    font-size: 12.5px; line-height: 1.6; color: #bae6fd;
+  }
+  #missionCard b { color: #f0f9ff; }
+
+  /* 접이식 학습 개념 카드 */
+  details.card summary {
+    cursor: pointer; list-style: none;
+    font-size: 13px; font-weight: 700;
+    display: flex; align-items: center; gap: 8px;
+    color: var(--text-main);
+  }
+  details.card summary::-webkit-details-marker { display: none; }
+  details.card summary .chev {
+    margin-left: auto; font-size: 11px; color: var(--text-dim);
+    transition: transform .2s;
+  }
+  details.card[open] summary .chev { transform: rotate(180deg); }
+  details.card[open] summary { margin-bottom: 10px; }
+  .concept-list { display: flex; flex-direction: column; gap: 9px; }
+  .concept-item {
+    background: rgba(8, 12, 24, 0.45);
+    border: 1px solid rgba(90, 130, 220, 0.18);
+    border-radius: 10px;
+    padding: 9px 11px;
+  }
+  .concept-item .ct { font-size: 12.5px; font-weight: 800; color: var(--text-main); margin-bottom: 4px; }
+  .concept-item .cd { font-size: 12px; line-height: 1.6; color: var(--text-dim); }
+  .concept-item .cd em { color: var(--accent); font-style: normal; font-weight: 700; }
+  .legend { display: flex; flex-direction: column; gap: 7px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--panel-border); }
+  .legend .row { display: flex; align-items: flex-start; gap: 9px; font-size: 12px; line-height: 1.5; color: var(--text-dim); }
+  .legend .row > span:last-child { flex: 1; min-width: 0; } /* 줄바꿈 시 글이 기호 아래로 밀리지 않고 제자리에 정렬 */
+  .legend .sym { width: 26px; text-align: center; flex-shrink: 0; margin-top: 1px; }
+  .legend .lg-note { display: block; margin-top: 2px; font-size: 11px; color: #7ea2d8; }
+  .sym-arrow { color: #fda4af; font-size: 15px; font-weight: 800; }
+  .sym-ring { display:inline-block; width: 13px; height: 13px; border: 2.5px solid var(--danger); border-radius: 50%; }
+  .sym-grid { color: var(--accent); font-size: 14px; }
+
+  /* 반응형 */
+  @media (max-width: 760px) {
+    #app { flex-direction: column; }
+    #sidebar { width: 100%; height: 45vh; min-height: 250px; border-left: none; border-top: 1px solid var(--panel-border); }
+    .slider-wrap { min-width: 130px; }
+    #hint { display: none; }
+    #controlsHelp { display: none; } /* 터치 기기에선 마우스 안내 숨김 */
+    #controls { bottom: 10px; padding: 9px 12px; gap: 10px; }
+    #toolbar { top: 58px; max-width: calc(100% - 24px); }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- ========== 3D 뷰포트 ========== -->
+  <div id="viewport">
+    <div id="topbar">
+      <div class="logo">🌌</div>
+      <div>
+        <h1>우주 팽창 시뮬레이션</h1>
+        <p>커지는 우주 공간 · 중심이 없는 우주 — 중학교 과학</p>
+      </div>
+    </div>
+
+    <!-- 조작 툴바: 체험(직접 해보기) / 보기(표시 켜고 끄기) 두 그룹으로 정리 -->
+    <div id="toolbar">
+      <div class="tool-group">
+        <span class="tg-label">체험</span>
+        <button class="tbtn" id="addGalaxyBtn">✨ 은하 추가</button>
+        <button class="tbtn" id="removeGalaxyBtn" disabled>🗑 은하 제거</button>
+        <button class="tbtn warm" id="fpBtn">👁 1인칭 관측</button>
+      </div>
+      <div class="tool-group">
+        <span class="tg-label">보기</span>
+        <button class="tbtn on" id="arrowsBtn">➡ 속도 화살표</button>
+        <button class="tbtn on" id="gridBtn">🕸 공간 격자</button>
+      </div>
+    </div>
+
+    <div id="hint">💡 은하를 클릭하면 그 은하에서 바라본 우주가 보여요</div>
+    <div id="controlsHelp">🖱 드래그: 회전 &nbsp;·&nbsp; 휠: 확대/축소</div>
+    <div id="labels"></div>
+
+    <div id="controls">
+      <button id="playBtn" title="시간 재생 / 일시정지">▶</button>
+      <div class="slider-wrap">
+        <div class="slider-head">
+          <span>우주 시간 조절</span>
+          <b id="scaleValue">우주 크기: 1.00배</b>
+        </div>
+        <input type="range" id="timeSlider" min="0.5" max="5" step="0.01" value="1">
+      </div>
+      <button id="resetBtn">↺ 처음으로</button>
+    </div>
+  </div>
+
+  <!-- ========== 우측 사이드바 (슬림) ========== -->
+  <aside id="sidebar">
+    <div class="card" id="observerCard">
+      <h2><span class="dot"></span>지금 내가 있는 은하</h2>
+      <div id="observerName"><span class="ring-ico"></span><span id="obsNameText">은하 A</span></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="dot"></span>관측 데이터 — 거리와 속도</h2>
+      <table id="galaxyTable">
+        <thead>
+          <tr><th>은하</th><th>상대적 거리</th><th>멀어지는 속도</th></tr>
+        </thead>
+        <tbody id="galaxyTbody"></tbody>
+      </table>
+    </div>
+
+    <div class="card" id="missionCard">
+      🎯 <b>미션</b> — 서로 다른 은하를 눌러 보세요. 어디에서 봐도 모든 은하가 멀어진다면, 우주의 중심은 어디일까요?
+    </div>
+
+    <details class="card" id="conceptCard">
+      <summary>💡 학습 개념 <span class="chev">▼</span></summary>
+      <div class="concept-list">
+        <div class="concept-item">
+          <div class="ct">🎈 공간이 부풀어요</div>
+          <div class="cd">은하가 움직이는 게 아니라, 은하를 담은 <em>공간이 커져서</em> 서로 멀어져요. 풍선 위에 그린 점들과 같아요!</div>
+        </div>
+        <div class="concept-item">
+          <div class="ct">📍 중심이 없어요</div>
+          <div class="cd">어느 은하에서 봐도 <em>모두가 나에게서</em> 멀어져요. 그래서 특별한 중심이 없어요.</div>
+        </div>
+        <div class="concept-item">
+          <div class="ct">🚀 멀수록 빨라요</div>
+          <div class="cd">멀리 있는 은하일수록 <em>더 빠르게</em> 멀어져요. 관측 데이터 표에서 확인해 보세요!</div>
+        </div>
+      </div>
+      <div class="legend">
+        <div class="row"><span class="sym"><span class="sym-ring"></span></span><span>붉은 링 — 지금 내가 있는 은하 (관측 기준)</span></div>
+        <div class="row"><span class="sym sym-arrow">→</span><span>화살표 — 멀어지는 방향, 길수록 빨리 멀어져요</span></div>
+        <div class="row"><span class="sym sym-grid">◍</span><span>파란 격자 — 부풀어 커지는 우주 공간<span class="lg-note">단, 격자의 끝 ≠ 우주의 끝! 우주는 끝없이 이어져요</span></span></div>
+      </div>
+    </details>
+  </aside>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(() => {
+  'use strict';
+
+  /* =========================================================
+   *  기본 설정
+   * ========================================================= */
+  const HUBBLE = 70;            // 교육용 비례 상수 (속도 = 상수 × 거리)
+  const SCALE_MIN = 0.5, SCALE_MAX = 5.0;
+  const PLAY_SPEED = 0.22;      // 초당 팽창 배율 증가량
+  const MAX_GALAXIES = 12;      // 은하 A ~ L
+
+  // comoving 은 "공변 좌표": 공간이 팽창해도 변하지 않는 바탕 좌표.
+  // 실제 위치 = 공변 좌표 × 우주 크기 배율 a  →  은하가 아니라 공간이 늘어난다!
+  const GALAXY_DEFS = [
+    { name: '은하 A', color: '#fbbf24', comoving: [ 14,   6,  -4] },
+    { name: '은하 B', color: '#38bdf8', comoving: [-16,   3,   8] },
+    { name: '은하 C', color: '#a78bfa', comoving: [  5, -12,  14] },
+    { name: '은하 D', color: '#34d399', comoving: [ -8,  -7, -15] },
+    { name: '은하 E', color: '#fb7185', comoving: [ 18,  -4,  11] },
+    { name: '은하 F', color: '#f472b6', comoving: [ -6,  14, -11] },
+  ];
+  const EXTRA_COLORS = ['#22d3ee', '#a3e635', '#fdba74', '#c084fc', '#5eead4', '#f9a8d4'];
+
+  const state = {
+    a: 1.0,             // 우주 크기 배율
+    playing: false,
+    observerIndex: 0,
+    showArrows: true,
+    showGrid: true,
+    firstPerson: false,  // 👁 1인칭 관측 모드 (카메라가 기준 은하 안에 들어감)
+  };
+
+  /* =========================================================
+   *  Three.js 씬 구성
+   * ========================================================= */
+  const viewport = document.getElementById('viewport');
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x05070f);
+  scene.fog = new THREE.FogExp2(0x05070f, 0.0022);
+
+  const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 15000); // 팽창한 별밭까지 보이도록 넉넉한 시야 거리
+  camera.position.set(55, 42, 95);
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  viewport.appendChild(renderer.domElement);
+
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.06;
+  controls.minDistance = 20;
+  controls.maxDistance = 400;
+
+  /* ---------- 배경 별밭 (여러 층으로 깊이감 있는 우주 연출) ---------- */
+  const starGroup = new THREE.Group();
+  scene.add(starGroup);
+  (function makeStars() {
+    const layers = [
+      { n: 1800, rMin: 450, rMax: 1100, size: 1.4, color: 0xffffff, opacity: 0.9  },
+      { n: 900,  rMin: 380, rMax: 950,  size: 2.4, color: 0xbcd0ff, opacity: 0.55 },
+      { n: 300,  rMin: 320, rMax: 850,  size: 3.6, color: 0xfff2c9, opacity: 0.75 },
+      { n: 120,  rMin: 300, rMax: 800,  size: 5.0, color: 0xffd9e8, opacity: 0.6  },
+    ];
+    layers.forEach(L => {
+      const pos = new Float32Array(L.n * 3);
+      for (let i = 0; i < L.n; i++) {
+        const r = L.rMin + Math.random() * (L.rMax - L.rMin);
+        const th = Math.random() * Math.PI * 2;
+        const ph = Math.acos(2 * Math.random() - 1);
+        pos[i*3]   = r * Math.sin(ph) * Math.cos(th);
+        pos[i*3+1] = r * Math.cos(ph);
+        pos[i*3+2] = r * Math.sin(ph) * Math.sin(th);
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      const m = new THREE.PointsMaterial({
+        color: L.color, size: L.size, sizeAttenuation: true,
+        transparent: true, opacity: L.opacity, fog: false, depthWrite: false,
+      });
+      const pts = new THREE.Points(g, m);
+      pts.userData.baseSize = L.size; // 팽창 시 크기 보정용 기준값
+      starGroup.add(pts);
+    });
+  })();
+
+  /* ---------- 팽창하는 공간을 나타내는 반투명 격자 구체 ----------
+   *  scale = a → "공간 자체"의 팽창.
+   *  position 은 매 프레임 관측자 은하 위치로 부드럽게(lerp) 따라간다.
+   *  → 어느 은하를 관측 기준으로 삼아도 "그 은하가 팽창의 중심처럼" 보임
+   *  → 특별한 중심이 없다는 개념을 직관적으로 체험  */
+  const spaceGroup = new THREE.Group();
+  scene.add(spaceGroup);
+
+  // 어떤 은하를 중심으로 삼아도 모든 은하가 격자 안에 들어오도록 넉넉한 반지름(40)
+  const gridSphere = new THREE.Mesh(
+    new THREE.SphereGeometry(40, 32, 20),
+    new THREE.MeshBasicMaterial({ color: 0x38bdf8, wireframe: true, transparent: true, opacity: 0.12, depthWrite: false })
+  );
+  spaceGroup.add(gridSphere);
+
+  const gridSphereInner = new THREE.Mesh(
+    new THREE.SphereGeometry(24, 18, 12),
+    new THREE.MeshBasicMaterial({ color: 0x60a5fa, wireframe: true, transparent: true, opacity: 0.07, depthWrite: false })
+  );
+  spaceGroup.add(gridSphereInner);
+
+  /* ---------- 은하 스프라이트 (Canvas Texture 자체 발광) ---------- */
+  function makeGalaxyTexture(colorHex) {
+    const S = 256;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = S;
+    const ctx = cv.getContext('2d');
+    const cx = S / 2, cy = S / 2;
+
+    let grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, S / 2);
+    grad.addColorStop(0.0, colorHex + 'ff');
+    grad.addColorStop(0.18, colorHex + 'cc');
+    grad.addColorStop(0.45, colorHex + '44');
+    grad.addColorStop(1.0, colorHex + '00');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, S, S);
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(Math.PI / 5);
+    ctx.scale(1, 0.42);
+    grad = ctx.createRadialGradient(0, 0, 0, 0, 0, S * 0.38);
+    grad.addColorStop(0, 'rgba(255,255,255,0.95)');
+    grad.addColorStop(0.35, colorHex + 'aa');
+    grad.addColorStop(1, colorHex + '00');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0, 0, S * 0.38, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, S * 0.07);
+    grad.addColorStop(0, '#ffffff');
+    grad.addColorStop(1, colorHex + '00');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, S, S);
+
+    const tex = new THREE.CanvasTexture(cv);
+    tex.minFilter = THREE.LinearFilter;
+    return tex;
+  }
+
+  const labelsLayer = document.getElementById('labels');
+  const galaxies = [];
+
+  function createGalaxy(name, color, comovingV) {
+    const index = galaxies.length;
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: makeGalaxyTexture(color),
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    }));
+    sprite.scale.set(7, 7, 1); // 은하 자체 크기는 팽창과 무관하게 고정
+    sprite.userData.index = index;
+    scene.add(sprite);
+
+    const el = document.createElement('div');
+    el.className = 'glabel';
+    el.innerHTML = `<span class="name"></span><span class="vel"></span>`;
+    labelsLayer.appendChild(el);
+
+    const g = { name, color, comovingV, sprite, arrow: null, labelEl: el, bornAt: performance.now() };
+    galaxies.push(g);
+    return g;
+  }
+
+  GALAXY_DEFS.forEach(d => createGalaxy(d.name, d.color, new THREE.Vector3(...d.comoving)));
+
+  /* ---------- 관측자 강조 링 (붉은색 이중 링 + 펄스) ---------- */
+  function makeRing(inner, outer, opacity) {
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(inner, outer, 48),
+      new THREE.MeshBasicMaterial({ color: 0xf43f5e, side: THREE.DoubleSide, transparent: true, opacity, depthWrite: false })
+    );
+    scene.add(ring);
+    return ring;
+  }
+  const ring1 = makeRing(4.4, 5.0, 0.95);
+  const ring2 = makeRing(5.6, 5.9, 0.45);
+
+  /* =========================================================
+   *  후퇴 화살표 — 관측자 기준으로 재구성
+   * ========================================================= */
+  function rebuildArrows() {
+    galaxies.forEach(g => {
+      if (g.arrow) { scene.remove(g.arrow); g.arrow = null; }
+    });
+    galaxies.forEach((g, i) => {
+      if (i === state.observerIndex) return;
+      const arrow = new THREE.ArrowHelper(
+        new THREE.Vector3(1, 0, 0), new THREE.Vector3(), 5, 0xfb7185, 2, 1.1
+      );
+      arrow.line.material.transparent = true;
+      arrow.line.material.opacity = 0.9;
+      arrow.cone.material.transparent = true;
+      arrow.cone.material.opacity = 0.9;
+      scene.add(arrow);
+      g.arrow = arrow;
+    });
+  }
+
+  /* =========================================================
+   *  관측자(우리은하) 변경
+   * ========================================================= */
+  function setObserver(index) {
+    state.observerIndex = index;
+    document.getElementById('obsNameText').textContent = galaxies[index].name;
+    rebuildArrows();
+    buildTable();
+  }
+
+  /* =========================================================
+   *  사이드바 관측 데이터 테이블
+   * ========================================================= */
+  const tbody = document.getElementById('galaxyTbody');
+  function buildTable() {
+    tbody.innerHTML = '';
+    galaxies.forEach((g, i) => {
+      const tr = document.createElement('tr');
+      tr.className = (i === state.observerIndex) ? 'obs-row' : '';
+      tr.innerHTML = `
+        <td><span class="gdot" style="background:${g.color}; box-shadow:0 0 6px ${g.color};"></span>${g.name}${i === state.observerIndex ? ' ★' : ''}</td>
+        <td class="dist-cell">—</td>
+        <td class="vel-cell">—</td>`;
+      tr.addEventListener('click', () => setObserver(i));
+      tbody.appendChild(tr);
+      g.rowEl = tr; // 정렬 시 행을 찾기 위한 참조
+    });
+    updateTable(); // 관측자 변경 즉시 거리순으로 정렬해서 표시
+  }
+
+  let lastOrderKey = '';
+  function updateTable() {
+    const obsPos = galaxies[state.observerIndex].sprite.position;
+    // 기준 은하(맨 위) → 가까운 은하 → 먼 은하 순으로 자동 정렬
+    // → "멀수록 멀어지는 속도가 빠르다"가 표에서 한눈에 보인다
+    const order = galaxies.map((g, i) => ({
+      g, i,
+      d: i === state.observerIndex ? -1 : g.sprite.position.distanceTo(obsPos),
+    })).sort((a, b) => a.d - b.d);
+
+    order.forEach(({ g, i, d }) => {
+      const row = g.rowEl;
+      if (!row) return;
+      if (i === state.observerIndex) {
+        row.querySelector('.dist-cell').textContent = '기준';
+        row.querySelector('.vel-cell').textContent = '(내 위치)';
+      } else {
+        row.querySelector('.dist-cell').textContent = d.toFixed(1);
+        row.querySelector('.vel-cell').textContent = Math.round(d * HUBBLE).toLocaleString();
+      }
+    });
+
+    // 순서가 실제로 바뀌었을 때만 행을 재배치 (불필요한 DOM 이동·hover 끊김 방지)
+    const key = order.map(o => o.i).join(',');
+    if (key !== lastOrderKey) {
+      lastOrderKey = key;
+      order.forEach(({ g }) => { if (g.rowEl) tbody.appendChild(g.rowEl); });
+    }
+  }
+
+  /* =========================================================
+   *  ✨ 은하 추가
+   * ========================================================= */
+  const addGalaxyBtn = document.getElementById('addGalaxyBtn');
+  addGalaxyBtn.addEventListener('click', () => {
+    if (galaxies.length >= MAX_GALAXIES) return;
+    const name = '은하 ' + String.fromCharCode(65 + galaxies.length); // G, H, I ...
+    const color = EXTRA_COLORS[(galaxies.length - GALAXY_DEFS.length) % EXTRA_COLORS.length];
+
+    // 기존 은하와 너무 겹치지 않는 랜덤 공변 좌표 찾기
+    let v = new THREE.Vector3();
+    for (let tries = 0; tries < 30; tries++) {
+      const r = 9 + Math.random() * 15;
+      const th = Math.random() * Math.PI * 2;
+      const ph = Math.acos(2 * Math.random() - 1);
+      v.set(r * Math.sin(ph) * Math.cos(th), r * Math.cos(ph) * 0.85, r * Math.sin(ph) * Math.sin(th));
+      if (galaxies.every(g => g.comovingV.distanceTo(v) > 8)) break;
+    }
+    createGalaxy(name, color, v.clone());
+    rebuildArrows();
+    buildTable();
+    syncGalaxyBtns();
+  });
+
+  /* =========================================================
+   *  🗑 은하 제거 — 가장 최근에 추가한 은하부터 없앤다 (기본 A~F는 유지)
+   * ========================================================= */
+  const removeGalaxyBtn = document.getElementById('removeGalaxyBtn');
+  removeGalaxyBtn.addEventListener('click', () => {
+    if (galaxies.length <= GALAXY_DEFS.length) return;
+    const g = galaxies.pop();
+    scene.remove(g.sprite);
+    g.sprite.material.map.dispose();
+    g.sprite.material.dispose();
+    if (g.arrow) { scene.remove(g.arrow); g.arrow = null; }
+    g.labelEl.remove();
+
+    // 없어진 은하가 관측 기준이었다면 은하 A로 복귀
+    if (state.observerIndex >= galaxies.length) {
+      setObserver(0);
+    } else {
+      rebuildArrows();
+      buildTable();
+    }
+    syncGalaxyBtns();
+  });
+
+  function syncGalaxyBtns() {
+    const full = galaxies.length >= MAX_GALAXIES;
+    addGalaxyBtn.disabled = full;
+    addGalaxyBtn.textContent = full ? '✨ 은하 가득!' : '✨ 은하 추가';
+    removeGalaxyBtn.disabled = galaxies.length <= GALAXY_DEFS.length;
+  }
+
+  /* =========================================================
+   *  시각 요소 토글 (화살표 / 격자)
+   * ========================================================= */
+  const arrowsBtn = document.getElementById('arrowsBtn');
+  const gridBtn = document.getElementById('gridBtn');
+  arrowsBtn.addEventListener('click', () => {
+    state.showArrows = !state.showArrows;
+    arrowsBtn.classList.toggle('on', state.showArrows);
+  });
+  gridBtn.addEventListener('click', () => {
+    state.showGrid = !state.showGrid;
+    gridBtn.classList.toggle('on', state.showGrid);
+    gridSphere.visible = gridSphereInner.visible = state.showGrid;
+  });
+
+  const hintEl = document.getElementById('hint');
+  const HINT_DEFAULT = '💡 은하를 클릭하면 그 은하에서 바라본 우주가 보여요';
+
+  /* =========================================================
+   *  👁 1인칭 관측 모드
+   *  — 카메라가 기준 은하 "안"으로 들어가, 그 은하에 사는 관측자의
+   *    눈으로 모든 은하가 나에게서 멀어지는 모습을 직접 본다.
+   *  — 드래그: 고개를 돌려 주위 둘러보기 (yaw/pitch)
+   * ========================================================= */
+  const fpBtn = document.getElementById('fpBtn');
+  const HINT_FP = '👁 1인칭 관측 중 — 드래그로 두리번거려 보세요. 모든 은하가 나에게서 멀어져요!';
+  let fpYaw = 0, fpPitch = 0, fpLooking = false, fpLastX = 0, fpLastY = 0;
+  const fpLookDir = new THREE.Vector3();
+
+  function fpUpdateLookDir() {
+    fpLookDir.set(
+      Math.sin(fpYaw) * Math.cos(fpPitch),
+      Math.sin(fpPitch),
+      Math.cos(fpYaw) * Math.cos(fpPitch)
+    );
+  }
+
+  function setFirstPerson(on) {
+    state.firstPerson = on;
+    fpBtn.classList.toggle('on', on);
+    controls.enabled = !on; // 1인칭에서는 궤도 카메라 대신 시선 회전
+    camera.fov = on ? 70 : 55; // 1인칭은 넓은 시야각으로 몰입감
+    camera.updateProjectionMatrix();
+    hintEl.textContent = on ? HINT_FP : HINT_DEFAULT;
+    const obsPos = galaxies[state.observerIndex].sprite.position;
+    if (on) {
+      // 현재 바라보던 방향을 이어받아 시선 초기화
+      const dir = new THREE.Vector3().subVectors(controls.target, camera.position).normalize();
+      fpPitch = Math.asin(THREE.MathUtils.clamp(dir.y, -1, 1));
+      fpYaw = Math.atan2(dir.x, dir.z);
+    } else {
+      // 나갈 때: 시선 반대쪽으로 물러나 다시 3인칭 궤도로
+      fpUpdateLookDir();
+      camera.position.copy(obsPos).addScaledVector(fpLookDir, -80);
+      camera.position.y += 25;
+      controls.target.copy(obsPos);
+    }
+  }
+  fpBtn.addEventListener('click', () => setFirstPerson(!state.firstPerson));
+
+  /* =========================================================
+   *  클릭/터치 — 은하 선택(레이캐스팅) + 1인칭 시선 드래그
+   * ========================================================= */
+  const raycaster = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
+  let downX = 0, downY = 0;
+
+  renderer.domElement.addEventListener('pointerdown', e => {
+    downX = e.clientX; downY = e.clientY;
+    if (state.firstPerson) {
+      fpLooking = true;
+      fpLastX = e.clientX; fpLastY = e.clientY;
+      try { renderer.domElement.setPointerCapture(e.pointerId); } catch (_) {}
+    }
+  });
+
+  renderer.domElement.addEventListener('pointermove', e => {
+    if (fpLooking) {
+      // 드래그로 고개 돌리기
+      fpYaw   -= (e.clientX - fpLastX) * 0.004;
+      fpPitch -= (e.clientY - fpLastY) * 0.004;
+      fpPitch = THREE.MathUtils.clamp(fpPitch, -1.45, 1.45);
+      fpLastX = e.clientX; fpLastY = e.clientY;
+    }
+  });
+
+  renderer.domElement.addEventListener('pointerup', e => {
+    fpLooking = false;
+    // 드래그(카메라 회전·시선 돌리기)와 클릭을 구분
+    if (Math.hypot(e.clientX - downX, e.clientY - downY) > 6) return;
+    const rect = renderer.domElement.getBoundingClientRect();
+    pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+    const hits = raycaster.intersectObjects(galaxies.map(g => g.sprite).filter(s => s.visible));
+    if (hits.length > 0) {
+      setObserver(hits[0].object.userData.index);
+    }
+  });
+
+  /* =========================================================
+   *  시간 컨트롤 UI
+   * ========================================================= */
+  const playBtn = document.getElementById('playBtn');
+  const slider = document.getElementById('timeSlider');
+  const scaleValue = document.getElementById('scaleValue');
+
+  function setPlaying(on) {
+    state.playing = on;
+    playBtn.textContent = on ? '❚❚' : '▶';
+    playBtn.classList.toggle('playing', on);
+    // 시간이 멈춰 있으면 속도 레이블을 흐리게 (팽창 중일 때의 관측값임을 표현)
+    labelsLayer.classList.toggle('paused', !on);
+  }
+  playBtn.addEventListener('click', () => {
+    // 끝까지 커진 상태에서 다시 재생하면 처음 크기부터 시작
+    if (!state.playing && state.a >= SCALE_MAX - 0.01) {
+      state.a = SCALE_MIN;
+      slider.value = state.a.toFixed(2);
+    }
+    setPlaying(!state.playing);
+  });
+  slider.addEventListener('input', () => { state.a = parseFloat(slider.value); });
+  document.getElementById('resetBtn').addEventListener('click', () => {
+    setPlaying(false);
+    if (state.firstPerson) setFirstPerson(false);
+    state.a = 1.0;
+    slider.value = '1';
+    camera.position.set(55, 42, 95);
+    controls.target.set(0, 0, 0);
+  });
+
+  /* =========================================================
+   *  메인 루프
+   * ========================================================= */
+  const clock = new THREE.Clock();
+  let frame = 0;
+  const tmpV = new THREE.Vector3();
+  const tmpDir = new THREE.Vector3();
+
+  function animate() {
+    requestAnimationFrame(animate);
+    const dt = Math.min(clock.getDelta(), 0.1);
+    frame++;
+
+    // --- 시간(팽창) 진행 ---
+    if (state.playing) {
+      state.a += PLAY_SPEED * dt;
+      if (state.a >= SCALE_MAX) { // 최대 크기에 도달하면 재생 종료
+        state.a = SCALE_MAX;
+        setPlaying(false);
+      }
+      slider.value = state.a.toFixed(2);
+    }
+    scaleValue.textContent = '우주 크기: ' + state.a.toFixed(2) + '배';
+
+    // --- 공간(격자) 팽창 ---
+    spaceGroup.scale.setScalar(state.a);
+    gridSphere.rotation.y += dt * 0.02;
+    starGroup.rotation.y += dt * 0.004; // 별밭이 아주 천천히 흐르는 연출
+    // 아주 먼 배경 별(은하)들도 공간 팽창을 따라 함께 멀어진다
+    // (너무 작아져 안 보이지 않도록 점 크기를 일부 보정)
+    starGroup.scale.setScalar(state.a);
+    starGroup.children.forEach(p => {
+      p.material.size = p.userData.baseSize * (0.6 + 0.4 * state.a);
+    });
+
+    // --- 은하 위치 = 공변 좌표 × a (은하 자체 크기는 그대로) ---
+    const now = performance.now();
+    galaxies.forEach((g, i) => {
+      g.sprite.position.copy(g.comovingV).multiplyScalar(state.a);
+      // 새로 추가된 은하는 뿅 하고 커지는 등장 연출
+      const grow = Math.min(1, (now - g.bornAt) / 450);
+      const s = 7 * (grow < 1 ? 1 - Math.pow(1 - grow, 3) : 1);
+      g.sprite.scale.set(s, s, 1);
+      // 1인칭 모드에서는 내가 "안에 들어가 있는" 은하는 그리지 않는다
+      g.sprite.visible = !(state.firstPerson && i === state.observerIndex);
+    });
+
+    const obsPos = galaxies[state.observerIndex].sprite.position;
+
+    // --- 공간 격자의 중심을 관측자 은하로 부드럽게 이동 ---
+    //     (관측자가 바뀌어도 툭 끊기지 않고 스르륵 따라감)
+    spaceGroup.position.lerp(obsPos, 0.06);
+
+    // --- 강조 링: 관측자 위치에서 항상 카메라를 향하도록 + 펄스 ---
+    //     (1인칭 모드에서는 내 위치라 보이지 않게 숨김)
+    ring1.visible = ring2.visible = !state.firstPerson;
+    if (!state.firstPerson) {
+      const t = now * 0.001;
+      const pulse = 1 + Math.sin(t * 3.2) * 0.1;
+      ring1.position.copy(obsPos); ring1.lookAt(camera.position); ring1.scale.setScalar(pulse);
+      ring2.position.copy(obsPos); ring2.lookAt(camera.position); ring2.scale.setScalar(1.15 - (pulse - 1));
+      ring2.material.opacity = 0.25 + Math.abs(Math.sin(now * 0.001 * 3.2)) * 0.3;
+    }
+
+    // --- 카메라 ---
+    if (state.firstPerson) {
+      // 1인칭: 카메라가 기준 은하 속으로 부드럽게 들어가 그곳에 머문다
+      camera.position.lerp(obsPos, 0.1);
+      fpUpdateLookDir();
+      tmpV.copy(camera.position).add(fpLookDir);
+      camera.lookAt(tmpV);
+    } else {
+      // 3인칭: 회전 중심을 관측자 은하 쪽으로 부드럽게 이동
+      controls.target.lerp(obsPos, 0.06);
+    }
+
+    // --- 후퇴 화살표 갱신 + 표시 토글 ---
+    //     시작점: 관측 은하(1인칭 기준점) → 각 은하를 향해 뻗어 나감
+    //     길이: 관측자와의 상대 거리(∝멀어지는 속도)에 비례, 대상 은하 앞에서 멈춤
+    galaxies.forEach((g, i) => {
+      if (!g.arrow) return;
+      g.arrow.visible = state.showArrows;
+      if (!state.showArrows) return;
+      tmpDir.copy(g.sprite.position).sub(obsPos);
+      const d = tmpDir.length();
+      tmpDir.normalize();
+      const start = 5.5;                                  // 붉은 링 바로 바깥에서 출발
+      const maxLen = Math.max(2, d - start - 4);          // 대상 은하와 겹치지 않게 제한
+      const len = Math.min(maxLen, 2 + d * 0.45);         // 멀수록 길게 (허블 법칙)
+      g.arrow.position.copy(obsPos).addScaledVector(tmpDir, start);
+      g.arrow.setDirection(tmpDir);
+      g.arrow.setLength(len, Math.min(2.6, len * 0.3), 1.2);
+    });
+
+    // --- 2D 레이블 투영 (3D → 화면 좌표) ---
+    const rect = renderer.domElement.getBoundingClientRect();
+    galaxies.forEach((g, i) => {
+      tmpV.copy(g.sprite.position).project(camera);
+      const behind = tmpV.z > 1;
+      const x = (tmpV.x + 1) / 2 * rect.width;
+      const y = (-tmpV.y + 1) / 2 * rect.height;
+      const el = g.labelEl;
+      const isObs = i === state.observerIndex;
+      // 1인칭 모드에서는 내 은하 레이블은 숨긴다 (내가 그 안에 있으므로)
+      el.style.opacity = (behind || (state.firstPerson && isObs)) ? '0' : '1';
+      el.style.left = x + 'px';
+      el.style.top = y + 'px';
+      el.classList.toggle('observer', isObs);
+      el.querySelector('.name').textContent = isObs ? `★ ${g.name} (관측 기준)` : g.name;
+      if (isObs) {
+        el.querySelector('.vel').textContent = '나의 위치';
+      } else {
+        const d = g.sprite.position.distanceTo(obsPos);
+        el.querySelector('.vel').textContent = '→ ' + Math.round(d * HUBBLE).toLocaleString() + ' km/s';
+      }
+    });
+
+    // --- 사이드바 테이블은 매 6프레임마다 갱신 ---
+    if (frame % 6 === 0) updateTable();
+
+    if (!state.firstPerson) controls.update();
+    renderer.render(scene, camera);
+  }
+
+  /* =========================================================
+   *  리사이즈 & 시작
+   * ========================================================= */
+  function resize() {
+    const w = viewport.clientWidth, h = viewport.clientHeight;
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+  }
+  window.addEventListener('resize', resize);
+  if (window.ResizeObserver) new ResizeObserver(resize).observe(viewport);
+
+  resize();
+  setObserver(0);
+  setPlaying(false); // 시작 시 일시정지 상태 UI(흐린 속도 + 안내) 반영
+  animate();
+})();
+</script>
+</body>
+</html>

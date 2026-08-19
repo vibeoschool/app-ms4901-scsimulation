@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>소리의 성질 탐구 실험실 | 중2 과학 - 빛과 파동</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --bg-panel: #131a2e;
+    --bg-card: #1a2340;
+    --border: #2a3558;
+    --accent: #22d3ee;
+    --accent2: #a78bfa;
+    --accent3: #f472b6;
+    --ok: #34d399;
+    --text: #e8edf8;
+    --text-dim: #93a0bd;
+    --radius: 14px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: radial-gradient(1200px 600px at 70% -10%, #1b2a55 0%, var(--bg) 55%);
+    color: var(--text);
+    font-family: "Pretendard", "Noto Sans KR", sans-serif;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 20px 16px 48px; }
+
+  /* 2단 레이아웃: 왼쪽 시뮬레이션 / 오른쪽 조절·개념 (양쪽 높이 일치) */
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; align-items: stretch; }
+  .side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+
+  header { text-align: left; margin-bottom: 18px; }
+  .badge {
+    display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .06em;
+    color: var(--accent); border: 1px solid var(--accent); border-radius: 999px;
+    padding: 3px 12px; margin-bottom: 8px;
+  }
+  header h1 { font-size: clamp(22px, 4.5vw, 30px); font-weight: 800; }
+  header p { color: var(--text-dim); font-size: 14px; margin-top: 4px; }
+
+  /* 탭 (사이드바 상단) */
+  .tabs { display: flex; gap: 10px; margin: 0; }
+  .tab {
+    flex: 1; padding: 10px 8px; border-radius: var(--radius);
+    background: var(--bg-panel); border: 1.5px solid var(--border);
+    color: var(--text-dim); font-size: 15px; font-weight: 800; cursor: pointer;
+    transition: all .2s; text-align: center; font-family: inherit; white-space: nowrap;
+  }
+  .tab:hover { border-color: var(--accent); color: var(--text); }
+  .tab.active {
+    background: linear-gradient(135deg, rgba(34,211,238,.16), rgba(167,139,250,.16));
+    border-color: var(--accent); color: #fff;
+    box-shadow: 0 0 18px rgba(34,211,238,.18);
+  }
+  .tab small { display: block; font-size: 11.5px; font-weight: 600; opacity: .8; margin-top: 3px; }
+
+  /* 캔버스 화면 */
+  .scope {
+    background: var(--bg-panel); border: 1.5px solid var(--border);
+    border-radius: var(--radius); padding: 14px; position: relative;
+    display: flex; flex-direction: column;
+  }
+  .scope-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; flex-shrink: 0; }
+  .scope-title { font-size: 14px; font-weight: 700; color: var(--text-dim); }
+  .scope-title b { color: var(--accent); }
+
+  .scope-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+  /* 캔버스가 남는 세로 공간을 채워 왼쪽·오른쪽 높이를 맞춤 */
+  .canvas-wrap { position: relative; flex: 1 1 auto; min-height: 250px; }
+  #waveCanvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; border-radius: 10px; background: #070b16; }
+
+  .btn {
+    font-family: inherit; font-weight: 800; font-size: 15px; cursor: pointer;
+    border: none; border-radius: 12px; padding: 10px 20px; color: #06202a;
+    background: linear-gradient(135deg, #22d3ee, #34d399);
+    box-shadow: 0 4px 16px rgba(34,211,238,.35); transition: all .15s;
+  }
+  .btn:hover { transform: translateY(-2px); }
+  .btn.playing { background: linear-gradient(135deg, #f472b6, #fb7185); color: #2a0714; box-shadow: 0 4px 16px rgba(244,114,182,.35); }
+  .btn.wave { background: linear-gradient(135deg, #a78bfa, #818cf8); color: #180f3a; box-shadow: 0 4px 16px rgba(167,139,250,.35); }
+  .btn.wave.playing { background: linear-gradient(135deg, #f472b6, #fb7185); color: #2a0714; box-shadow: 0 4px 16px rgba(244,114,182,.35); }
+
+  .banner {
+    margin-top: 12px; padding: 10px 16px; border-radius: 12px; font-size: 14px; font-weight: 700;
+    background: rgba(34,211,238,.08); border: 1px dashed rgba(34,211,238,.45); color: var(--accent);
+    text-align: center; min-height: 42px; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .banner.amp { background: rgba(244,114,182,.08); border-color: rgba(244,114,182,.5); color: var(--accent3); }
+
+  /* 데이터 카드: 시뮬레이션 화면 안 오버레이 */
+  .data-grid {
+    position: absolute; left: 10px; right: 10px; bottom: 10px;
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+  }
+  .data-card {
+    background: rgba(26,35,64,.82); backdrop-filter: blur(3px);
+    border: 1.5px solid var(--border); border-radius: 12px;
+    padding: 8px 6px; text-align: center;
+  }
+  .data-card .k { font-size: 11px; color: var(--text-dim); font-weight: 600; }
+  .data-card .v { font-size: clamp(14px, 2.5vw, 18px); font-weight: 800; margin-top: 2px; }
+  .data-card .v .unit { font-size: 11px; font-weight: 600; color: var(--text-dim); margin-left: 2px; }
+  .data-card.c1 .v { color: var(--accent); }
+  .data-card.c2 .v { color: var(--accent2); }
+  .data-card.c3 .v { color: var(--accent3); }
+  .data-card.c4 .v { color: var(--ok); }
+
+  /* 슬라이더 / 악기 패널 */
+  .controls { margin-top: 0; }
+  .panel { background: var(--bg-panel); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 13px 14px; }
+  .panel h3 { font-size: 14px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  .panel h3 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+
+  .slider-row { margin-bottom: 10px; }
+  .slider-row:last-child { margin-bottom: 0; }
+  .slider-label { display: flex; justify-content: space-between; font-size: 13.5px; margin-bottom: 6px; }
+  .slider-label .val { font-weight: 800; }
+  .slider-label .val.freq { color: var(--accent); }
+  .slider-label .val.amp { color: var(--accent3); }
+  input[type=range] {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 8px; border-radius: 999px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2)); outline: none; cursor: pointer;
+  }
+  input[type=range].amp-slider { background: linear-gradient(90deg, #475069, var(--accent3)); }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 20px; height: 20px; border-radius: 50%;
+    background: #fff; border: 3px solid var(--accent); cursor: pointer;
+  }
+  input[type=range].amp-slider::-webkit-slider-thumb { border-color: var(--accent3); }
+  input[type=range]::-moz-range-thumb {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: #fff; border: 3px solid var(--accent); cursor: pointer;
+  }
+  input[type=range].amp-slider::-moz-range-thumb { border-color: var(--accent3); }
+  .slider-hint { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+
+  .inst-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+  .inst-btn {
+    font-family: inherit; background: var(--bg-card); border: 1.5px solid var(--border); border-radius: 12px;
+    color: var(--text); padding: 12px 8px; cursor: pointer; transition: all .2s; text-align: center;
+  }
+  .inst-btn .icon { font-size: 24px; display: block; margin-bottom: 4px; }
+  .inst-btn .name { font-size: 13.5px; font-weight: 800; }
+  .inst-btn .desc { font-size: 10.5px; color: var(--text-dim); margin-top: 2px; }
+  .inst-btn:hover { border-color: var(--accent2); }
+  .inst-btn.active { border-color: var(--accent2); background: rgba(167,139,250,.15); }
+
+  /* 개념 카드 */
+  .concepts { margin-top: 0; }
+  .concepts h2 { font-size: 15px; margin-bottom: 8px; }
+  .concept-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+  .concept-card {
+    background: var(--bg-panel); border: 1.5px solid var(--border); border-radius: var(--radius);
+    padding: 11px 12px; border-top: 3px solid var(--accent);
+  }
+  .concept-card:nth-child(2) { border-top-color: var(--accent3); }
+  .concept-card:nth-child(3) { border-top-color: var(--accent2); }
+  .concept-card h4 { font-size: 13.5px; margin-bottom: 6px; }
+  .concept-card ul { list-style: none; margin: 0; padding: 0; }
+  .concept-card li {
+    font-size: 12px; color: var(--text-dim); position: relative;
+    padding-left: 14px; margin-bottom: 3px;
+  }
+  .concept-card li b { color: var(--text); }
+  .concept-card li::before { content: "•"; position: absolute; left: 2px; color: var(--accent); font-weight: 800; }
+  .concept-card:nth-child(2) li::before { color: var(--accent3); }
+  .concept-card:nth-child(3) li::before { color: var(--accent2); }
+  .concept-card .formula {
+    margin-top: 6px; padding: 5px 8px; background: var(--bg-card); border-radius: 6px;
+    font-size: 11.5px; color: var(--accent); font-weight: 700; text-align: center;
+  }
+
+  .hidden { display: none !important; }
+  footer { text-align: center; color: var(--text-dim); font-size: 11.5px; margin-top: 24px; }
+
+  @media (max-width: 640px) {
+    /* 모바일: 카드가 화면을 가리지 않도록 캔버스 아래로 내림 */
+    .canvas-wrap { min-height: 0; }
+    #waveCanvas { position: static; height: 200px; }
+    .data-grid { position: static; margin-top: 10px; grid-template-columns: repeat(2, 1fr); }
+    .tabs { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="badge">중학교 2학년 · 과학 · 빛과 파동</div>
+    <h1>🔊 소리의 성질 탐구 실험실</h1>
+    <p>슬라이더를 움직여 파동의 모양과 소리가 어떻게 변하는지 관찰해 보세요!</p>
+  </header>
+
+  <div class="layout">
+
+  <!-- 왼쪽: 파동 관찰 화면 -->
+  <div class="scope">
+    <div class="scope-head">
+      <div class="scope-title">📡 파동 형태 관찰 <b id="scopeInfo">— 440 Hz</b></div>
+      <div class="scope-controls">
+        <button class="btn wave" id="animBtn">🌊 파동 움직임 켜기</button>
+        <button class="btn" id="playBtn">▶ 소리 재생</button>
+      </div>
+    </div>
+    <div class="canvas-wrap">
+      <canvas id="waveCanvas"></canvas>
+      <!-- 측정값: 시뮬레이션 화면 안 표시 -->
+      <div class="data-grid">
+        <div class="data-card c1"><div class="k">진동수</div><div class="v"><span id="dFreq">440</span><span class="unit">Hz</span></div></div>
+        <div class="data-card c2"><div class="k">파장 (공기 중)</div><div class="v"><span id="dWavelen">0.78</span><span class="unit">m</span></div></div>
+        <div class="data-card c3"><div class="k">진폭</div><div class="v"><span id="dAmp">60</span><span class="unit">%</span></div></div>
+        <div class="data-card c4"><div class="k">소리 판정</div><div class="v" id="dJudge">중간 음</div></div>
+      </div>
+    </div>
+    <div class="banner" id="banner">🖱️ [소리 재생] 버튼을 누르고 슬라이더를 움직여 보세요.</div>
+  </div>
+
+  <!-- 오른쪽: 모드 선택 + 조절 패널 + 개념 정리 -->
+  <aside class="side">
+
+  <!-- 모드 선택 탭 -->
+  <div class="tabs">
+    <button class="tab active" data-mode="explore">🎛️ 모드 1<small>진동수·진폭 탐구</small></button>
+    <button class="tab" data-mode="timbre">🎻 모드 2<small>악기별 음색 비교</small></button>
+  </div>
+
+  <div class="controls">
+    <!-- 모드 1 패널 -->
+    <div class="panel" id="panel-explore">
+      <h3><span class="dot"></span>소리의 높낮이 · 크기 조절</h3>
+      <div class="slider-row">
+        <div class="slider-label">
+          <span>🎵 진동수 (소리의 높낮이)</span>
+          <span class="val freq"><span id="freqVal">440</span> Hz</span>
+        </div>
+        <input type="range" id="freqSlider" min="220" max="880" value="440" step="1">
+        <div class="slider-hint"><span>220 Hz (저음 ↓)</span><span>880 Hz (고음 ↑)</span></div>
+      </div>
+      <div class="slider-row">
+        <div class="slider-label">
+          <span>📢 진폭 (소리의 크기)</span>
+          <span class="val amp"><span id="ampVal">60</span> %</span>
+        </div>
+        <input type="range" id="ampSlider" class="amp-slider" min="0" max="100" value="60" step="1">
+        <div class="slider-hint"><span>0 % (무음)</span><span>100 % (큰 소리)</span></div>
+      </div>
+    </div>
+
+    <!-- 모드 2 패널 -->
+    <div class="panel hidden" id="panel-timbre">
+      <h3><span class="dot"></span>같은 음(라, A4 = 440 Hz)의 악기별 파형(음색) 비교</h3>
+      <div class="inst-grid">
+        <button class="inst-btn active" data-inst="tuningfork">
+          <span class="icon">🔱</span><span class="name">소리굽쇠</span>
+          <div class="desc">순수한 기본음 (사인파)</div>
+        </button>
+        <button class="inst-btn" data-inst="flute">
+          <span class="icon">🎼</span><span class="name">리코더/플루트</span>
+          <div class="desc">부드러운 파형</div>
+        </button>
+        <button class="inst-btn" data-inst="piano">
+          <span class="icon">🎹</span><span class="name">피아노</span>
+          <div class="desc">배음이 겹친 복합파</div>
+        </button>
+        <button class="inst-btn" data-inst="violin">
+          <span class="icon">🎻</span><span class="name">바이올린</span>
+          <div class="desc">화려한 톱니파</div>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 개념 정리 -->
+  <div class="concepts">
+    <h2>📚 핵심 개념 요약</h2>
+    <div class="concept-grid">
+      <div class="concept-card">
+        <h4>🎵 소리의 높낮이 = 진동수</h4>
+        <ul>
+          <li>1초 동안 <b>진동하는 횟수</b> (Hz)</li>
+          <li>커지면 파형이 <b>촘촘</b>해짐</li>
+        </ul>
+        <div class="formula">진동수 커짐 → 높은 소리</div>
+      </div>
+      <div class="concept-card">
+        <h4>📢 소리의 크기 = 진폭</h4>
+        <ul>
+          <li>중심에서 <b>벗어난 최대 거리</b></li>
+          <li>커지면 파형의 <b>위아래 높이</b>가 커짐</li>
+        </ul>
+        <div class="formula">진폭 커짐 → 큰 소리</div>
+      </div>
+      <div class="concept-card">
+        <h4>🎻 소리의 맵시 = 파형(음색)</h4>
+        <ul>
+          <li>파동의 <b>생김새(모양)</b>를 뜻함</li>
+          <li>악기마다 <b>파형이 다름</b></li>
+        </ul>
+        <div class="formula">파형 다름 → 다른 소리로 들림</div>
+      </div>
+    </div>
+  </div>
+
+  </aside><!-- /.side -->
+  </div><!-- /.layout -->
+
+  <footer>💡 소리는 공기의 진동으로 전달되는 파동입니다 (공기 중 속력 ≈ 343 m/s)</footer>
+</div>
+
+<script>
+"use strict";
+
+const state = {
+  mode: "explore",
+  freq: 440,
+  amp: 60,
+  instrument: "tuningfork",
+  playing: false,
+  animate: false, // 기본값: 정지화면 (정신사나움 방지)
+  time: 0
+};
+
+const INSTRUMENTS = {
+  tuningfork: { label: "소리굽쇠 (사인파)", harmonics: [1] },
+  flute:      { label: "리코더/플루트", harmonics: [1, 0.2, 0.05] },
+  piano:      { label: "피아노 (복합파)", harmonics: [1, 0.5, 0.25, 0.1, 0.05] },
+  violin:     { label: "바이올린 (톱니파)", harmonics: [1, 0.5, 0.33, 0.25, 0.2] },
+};
+
+const VISUAL_SPEED = 38000;   // λ(px) = VISUAL_SPEED / freq
+const SCROLL_SPEED = 150;     // 파동 진행 속력 (px/s)
+
+// --- Web Audio API 엔진 ---
+let audioCtx = null, mainOsc = null, mainGain = null;
+
+function ensureAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === "suspended") audioCtx.resume();
+  return audioCtx;
+}
+
+function startTone() {
+  const ctx = ensureAudio();
+  stopTone();
+
+  const t = ctx.currentTime;
+  mainGain = ctx.createGain();
+  const targetGain = ((state.mode === "timbre" ? 70 : state.amp) / 100) * 0.3;
+  // '뚝' 소리 방지: 0에서 짧게 페이드 인
+  mainGain.gain.setValueAtTime(0, t);
+  mainGain.gain.setTargetAtTime(targetGain, t, 0.02);
+  mainGain.connect(ctx.destination);
+
+  mainOsc = ctx.createOscillator();
+  const freq = (state.mode === "timbre") ? 440 : state.freq;
+  mainOsc.frequency.setValueAtTime(freq, t);
+
+  // 파형(배음) 구성
+  const harmonics = (state.mode === "timbre") ? INSTRUMENTS[state.instrument].harmonics : [1];
+  if (harmonics.length === 1) {
+    mainOsc.type = "sine";
+  } else {
+    const real = new Float32Array(harmonics.length + 1);
+    const imag = new Float32Array(harmonics.length + 1);
+    harmonics.forEach((h, i) => { imag[i + 1] = h; });
+    const wave = ctx.createPeriodicWave(real, imag);
+    mainOsc.setPeriodicWave(wave);
+  }
+
+  mainOsc.connect(mainGain);
+  mainOsc.start();
+  state.playing = true;
+  updatePlayBtn();
+}
+
+function stopTone() {
+  if (mainOsc) {
+    // '뚝' 소리 방지: 짧게 페이드 아웃 후 정지
+    const osc = mainOsc, g = mainGain;
+    try {
+      const t = audioCtx.currentTime;
+      g.gain.setTargetAtTime(0, t, 0.02);
+      osc.stop(t + 0.2);
+      osc.onended = () => { try { osc.disconnect(); g.disconnect(); } catch (e) {} };
+    } catch (e) {
+      try { osc.stop(); osc.disconnect(); g && g.disconnect(); } catch (e2) {}
+    }
+    mainOsc = null;
+    mainGain = null;
+  }
+  state.playing = false;
+  updatePlayBtn();
+}
+
+function applyTone() {
+  if (!mainOsc || !audioCtx) return;
+  const t = audioCtx.currentTime;
+  const freq = (state.mode === "timbre") ? 440 : state.freq;
+  const targetGain = ((state.mode === "timbre" ? 70 : state.amp) / 100) * 0.3;
+
+  mainOsc.frequency.setTargetAtTime(freq, t, 0.02);
+  mainGain.gain.setTargetAtTime(targetGain, t, 0.02);
+}
+
+// --- Canvas 시각화 ---
+const canvas = document.getElementById("waveCanvas");
+const cx = canvas.getContext("2d");
+let W = 0, H = 0;
+
+function resizeCanvas() {
+  const rect = canvas.getBoundingClientRect();
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  W = rect.width; H = rect.height;
+  canvas.width = Math.round(W * dpr);
+  canvas.height = Math.round(H * dpr);
+  cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  draw();
+}
+window.addEventListener("resize", resizeCanvas);
+// 레이아웃 변화(사이드바 높이에 맞춰 캔버스가 늘어나는 경우 등)에도 자동 재조정
+if (window.ResizeObserver) new ResizeObserver(resizeCanvas).observe(canvas);
+
+// 위상: k·x − (움직임 켜짐일 때) k·v·t
+function phaseAt(x, k) {
+  return k * x - (state.animate ? k * SCROLL_SPEED * state.time : 0);
+}
+
+function getWaveY(x, k, harmonics) {
+  const phase = phaseAt(x, k);
+  let y = 0, sum = 0;
+  harmonics.forEach((h, i) => {
+    y += h * Math.sin((i + 1) * phase);
+    sum += h;
+  });
+  return y / sum;
+}
+
+function draw() {
+  if (W < 2 || H < 2) return; // 아직 레이아웃 크기가 안 잡힌 경우
+  cx.clearRect(0, 0, W, H);
+  const midY = H / 2;
+  const freq = (state.mode === "timbre") ? 440 : state.freq;
+  const ampPct = (state.mode === "timbre") ? 70 : state.amp;
+  const ampPx = (ampPct / 100) * (H * 0.35);
+  const harmonics = (state.mode === "timbre") ? INSTRUMENTS[state.instrument].harmonics : [1];
+  const lambdaPx = VISUAL_SPEED / freq;
+  const k = (2 * Math.PI) / lambdaPx;
+
+  // 배경 격자
+  cx.strokeStyle = "rgba(120,140,200,0.08)";
+  cx.lineWidth = 1;
+  cx.beginPath();
+  for (let x = 0; x <= W; x += 30) { cx.moveTo(x, 0); cx.lineTo(x, H); }
+  for (let y = 0; y <= H; y += 30) { cx.moveTo(0, y); cx.lineTo(W, y); }
+  cx.stroke();
+
+  // 중심 기준선
+  cx.strokeStyle = "rgba(147,160,189,0.5)";
+  cx.setLineDash([5, 5]);
+  cx.beginPath(); cx.moveTo(0, midY); cx.lineTo(W, midY); cx.stroke();
+  cx.setLineDash([]);
+  cx.fillStyle = "rgba(147,160,189,0.7)";
+  cx.font = "11px sans-serif";
+  cx.fillText("진동의 중심선", 8, midY - 6);
+
+  // 진폭 가이드선
+  if (ampPx > 2) {
+    cx.strokeStyle = "rgba(244,114,182,0.55)";
+    cx.setLineDash([3, 4]);
+    cx.beginPath();
+    cx.moveTo(0, midY - ampPx); cx.lineTo(W, midY - ampPx);
+    cx.moveTo(0, midY + ampPx); cx.lineTo(W, midY + ampPx);
+    cx.stroke();
+    cx.setLineDash([]);
+
+    // 진폭 표시: 중심선 → 마루까지 양방향 화살표 + 라벨
+    const ax = 34, head = 5;
+    cx.strokeStyle = "#f472b6";
+    cx.lineWidth = 2;
+    cx.beginPath();
+    cx.moveTo(ax, midY); cx.lineTo(ax, midY - ampPx);
+    // 위쪽 화살촉
+    cx.moveTo(ax - head, midY - ampPx + head + 2); cx.lineTo(ax, midY - ampPx); cx.lineTo(ax + head, midY - ampPx + head + 2);
+    // 아래쪽 화살촉
+    cx.moveTo(ax - head, midY - head - 2); cx.lineTo(ax, midY); cx.lineTo(ax + head, midY - head - 2);
+    cx.stroke();
+    cx.lineWidth = 1;
+
+    // 라벨 배경 + 글자 (겹쳐도 읽히도록)
+    const label = "진폭";
+    cx.font = "bold 13px sans-serif";
+    const tw = cx.measureText(label).width;
+    const ly = midY - ampPx / 2;
+    cx.fillStyle = "rgba(7,11,22,0.85)";
+    cx.fillRect(ax + 8, ly - 10, tw + 10, 20);
+    cx.fillStyle = "#f472b6";
+    cx.fillText(label, ax + 13, ly + 5);
+  }
+
+  // 파동 선 그리기
+  if (ampPx > 0.5) {
+    cx.lineWidth = 2.8;
+    cx.strokeStyle = "#22d3ee";
+    cx.beginPath();
+    for (let x = 0; x <= W; x += 2) {
+      const y = midY - getWaveY(x, k, harmonics) * ampPx;
+      (x === 0) ? cx.moveTo(x, y) : cx.lineTo(x, y);
+    }
+    cx.stroke();
+  }
+
+  // 파장(λ) 표시선 — 기본음의 마루 위치에 정렬 (마루 → 다음 마루)
+  if (ampPx > 5 && lambdaPx < W * 0.8) {
+    // 마루: phase = π/2 (+ 2πn)  →  x = (π/2 + 이동 위상)/k + n·λ
+    const shift = state.animate ? k * SCROLL_SPEED * state.time : 0;
+    let startX = (((Math.PI / 2 + shift) / k) % lambdaPx + lambdaPx) % lambdaPx;
+    while (startX < W * 0.15) startX += lambdaPx;
+    const endX = startX + lambdaPx;
+
+    if (endX < W - 8) {
+      const markY = 20;
+      cx.strokeStyle = "#a78bfa";
+      cx.lineWidth = 1.5;
+      cx.beginPath();
+      cx.moveTo(startX, markY - 5); cx.lineTo(startX, markY + 5);
+      cx.moveTo(endX, markY - 5); cx.lineTo(endX, markY + 5);
+      cx.moveTo(startX, markY); cx.lineTo(endX, markY);
+      cx.stroke();
+
+      // 마루까지 점선 연결 (마루→마루임을 시각적으로 표시)
+      cx.strokeStyle = "rgba(167,139,250,0.35)";
+      cx.setLineDash([3, 4]);
+      cx.beginPath();
+      cx.moveTo(startX, markY + 5); cx.lineTo(startX, midY - getWaveY(startX, k, harmonics) * ampPx);
+      cx.moveTo(endX, markY + 5); cx.lineTo(endX, midY - getWaveY(endX, k, harmonics) * ampPx);
+      cx.stroke();
+      cx.setLineDash([]);
+
+      cx.fillStyle = "#a78bfa";
+      cx.font = "bold 11px sans-serif";
+      cx.textAlign = "center";
+      cx.fillText("파장", (startX + endX) / 2, markY + 16);
+      cx.textAlign = "left";
+    }
+  }
+}
+
+function loop(timestamp) {
+  if (W < 2 || H < 2) resizeCanvas(); // 숨겨진 탭에서 열린 경우 크기가 잡히면 자동 복구
+  if (state.animate) {
+    state.time = timestamp / 1000;
+    draw();
+  }
+  requestAnimationFrame(loop);
+}
+
+// --- UI 관리 ---
+const $ = (id) => document.getElementById(id);
+
+function updatePlayBtn() {
+  const btn = $("playBtn");
+  if (state.playing) { btn.textContent = "⏹ 소리 정지"; btn.classList.add("playing"); }
+  else { btn.textContent = "▶ 소리 재생"; btn.classList.remove("playing"); }
+}
+
+function updateAnimBtn() {
+  const btn = $("animBtn");
+  if (state.animate) { btn.textContent = "⏹ 파동 움직임 끄기"; btn.classList.add("playing"); }
+  else { btn.textContent = "🌊 파동 움직임 켜기"; btn.classList.remove("playing"); }
+}
+
+function updateDataCards() {
+  const freq = (state.mode === "timbre") ? 440 : state.freq;
+  const amp = (state.mode === "timbre") ? 70 : state.amp;
+  $("dFreq").textContent = freq;
+  $("dWavelen").textContent = (343 / freq).toFixed(2);
+  $("dAmp").textContent = amp;
+  $("dJudge").textContent = freq < 330 ? "낮은 음 🔉" : (freq < 590 ? "중간 음 🔊" : "높은 음 📣");
+  $("scopeInfo").textContent = (state.mode === "timbre")
+    ? `— ${INSTRUMENTS[state.instrument].label}`
+    : `— ${freq} Hz`;
+  draw();
+}
+
+function setBanner(msg, cls) {
+  const b = $("banner");
+  b.className = "banner" + (cls ? " " + cls : "");
+  b.innerHTML = msg;
+}
+
+// --- 이벤트 바인딩 ---
+$("playBtn").addEventListener("click", () => {
+  if (state.playing) stopTone();
+  else startTone();
+});
+
+$("animBtn").addEventListener("click", () => {
+  state.animate = !state.animate;
+  updateAnimBtn();
+  if (!state.animate) draw(); // 정지 시 즉시 재렌더링
+});
+
+$("freqSlider").addEventListener("input", (e) => {
+  state.freq = +e.target.value;
+  $("freqVal").textContent = state.freq;
+  applyTone();
+  updateDataCards();
+  setBanner(state.freq >= 440
+    ? "🎵 <b>진동수 증가 → 파장 짧아짐(촘촘함) → 높은 소리!</b>"
+    : "🎵 <b>진동수 감소 → 파장 길어짐(듬성함) → 낮은 소리!</b>");
+});
+
+$("ampSlider").addEventListener("input", (e) => {
+  state.amp = +e.target.value;
+  $("ampVal").textContent = state.amp;
+  applyTone();
+  updateDataCards();
+  setBanner(state.amp >= 60
+    ? "📢 <b>진폭 증가 → 파동 높이 커짐 → 큰 소리!</b>"
+    : "📢 <b>진폭 감소 → 파동 높이 작아짐 → 작은 소리!</b>", "amp");
+});
+
+document.querySelectorAll(".inst-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    state.instrument = btn.dataset.inst;
+    document.querySelectorAll(".inst-btn").forEach(b => b.classList.toggle("active", b === btn));
+    if (state.playing) startTone();
+    updateDataCards();
+  });
+});
+
+document.querySelectorAll(".tab").forEach(t => {
+  t.addEventListener("click", () => {
+    const mode = t.dataset.mode;
+    state.mode = mode;
+    document.querySelectorAll(".tab").forEach(tab => tab.classList.toggle("active", tab === t));
+    $("panel-explore").classList.toggle("hidden", mode !== "explore");
+    $("panel-timbre").classList.toggle("hidden", mode !== "timbre");
+
+    if (mode === "explore") setBanner("🖱️ 슬라이더를 움직여 진동수와 진폭에 따른 파동 모양 변화를 관찰하세요.");
+    else setBanner("🎼 같은 440 Hz 음이지만 악기별로 파형의 모양(음색)이 다른 것을 확인할 수 있습니다.");
+
+    if (state.playing) startTone();
+    updateDataCards();
+  });
+});
+
+// 초기화
+resizeCanvas();
+updateDataCards();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
